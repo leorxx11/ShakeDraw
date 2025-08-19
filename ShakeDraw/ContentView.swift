@@ -1,0 +1,514 @@
+//
+//  ContentView.swift
+//  ShakeDraw
+//
+//  Created by 赵粒宇 on 2025/8/19.
+//
+
+import SwiftUI
+import UIKit
+
+struct ContentView: View {
+    @StateObject private var folderManager = FolderManager()
+    @StateObject private var imageLoader = ImageLoader()
+    @StateObject private var shakeDetector = ShakeDetector()
+    @StateObject private var drawManager = RandomDrawManager()
+    @State private var isShaking = false
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                VStack(spacing: 20) {
+                    if !folderManager.hasPermission {
+                        setupView
+                    } else {
+                        mainView
+                    }
+                }
+                .padding()
+                
+                // 左上角图片数量标签
+                if folderManager.hasPermission && !imageLoader.images.isEmpty {
+                    VStack {
+                        HStack {
+                            HStack(spacing: 6) {
+                                Image(systemName: "photo.stack.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                Text("\(imageLoader.images.count)")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                            }
+                            .foregroundColor(.primary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(.regularMaterial)
+                            )
+                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                        
+                        Spacer()
+                    }
+                }
+                
+                // 右上角菜单按钮 - 始终显示
+                VStack {
+                    HStack {
+                        Spacer()
+                        
+                        Menu {
+                            Button(action: {
+                                folderManager.selectFolder()
+                            }) {
+                                Label("从文件导入", systemImage: "folder.badge.plus")
+                            }
+                            
+                            if folderManager.hasPermission {
+                                Button(role: .destructive, action: {
+                                    // 清除所有数据
+                                    drawManager.clearAllData()
+                                    imageLoader.images.removeAll()
+                                    folderManager.clearFolder()
+                                }) {
+                                    Label("清除", systemImage: "trash")
+                                }
+                            }
+                        } label: {
+                            Image(systemName: folderManager.hasPermission ? "ellipsis.circle" : "plus.circle")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.blue)
+                                .padding(10)
+                                .background(
+                                    Circle()
+                                        .fill(.regularMaterial)
+                                )
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 10)
+                    
+                    Spacer()
+                }
+            }
+            .navigationBarHidden(true)
+            .onAppear {
+                drawManager.setDependencies(imageLoader: imageLoader, folderManager: folderManager)
+                // 在任何权限判断之前，优先展示缓存预览（若存在）
+                drawManager.showCachedPreviewIfAny()
+                
+                shakeDetector.setShakeCallback {
+                    if folderManager.hasPermission && !imageLoader.images.isEmpty {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            isShaking = true
+                        }
+                        drawManager.performRandomDraw()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            isShaking = false
+                        }
+                    }
+                }
+                
+                loadImagesIfNeeded()
+            }
+            .onChange(of: folderManager.selectedFolderURL) { _, _ in
+                // 文件夹URL发生变化时重新加载图片
+                loadImagesIfNeeded()
+            }
+        }
+    }
+    
+    private func loadImagesIfNeeded() {
+        guard folderManager.hasPermission, let folderURL = folderManager.selectedFolderURL else {
+            return
+        }
+        
+        // 先检查是否有上次结果，若有，先进入恢复流程，避免短暂显示初始界面
+        if drawManager.hasStoredResult() {
+            // 立即显示加载指示，而非初始界面
+            drawManager.isRestoring = true
+            drawManager.restoreLastResultIfAvailable()
+        }
+        imageLoader.loadImages(from: folderURL)
+    }
+    
+    private var setupView: some View {
+        VStack(spacing: 30) {
+            VStack(spacing: 20) {
+                Image(systemName: "photo.stack")
+                    .font(.system(size: 70))
+                    .foregroundColor(.blue)
+                    .symbolEffect(.bounce, options: .repeating.speed(0.5))
+                
+                VStack(spacing: 8) {
+                    Text("欢迎使用晃动抽签")
+                        .font(.title)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    Text("让随机选择更有趣")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            VStack(spacing: 20) {
+                VStack(spacing: 15) {
+                    HStack(spacing: 15) {
+                        Image(systemName: "1.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title2)
+                        Text("点击右上角导入图片文件夹")
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    
+                    HStack(spacing: 15) {
+                        Image(systemName: "2.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title2)
+                        Text("摇动手机或点击按钮抽签")
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                    
+                    HStack(spacing: 15) {
+                        Image(systemName: "3.circle.fill")
+                            .foregroundColor(.blue)
+                            .font(.title2)
+                        Text("享受随机选择的乐趣")
+                            .font(.body)
+                            .foregroundColor(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 20)
+                }
+                .padding(.vertical, 15)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color.blue.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.blue.opacity(0.1), lineWidth: 1)
+                        )
+                )
+                .padding(.horizontal, 15)
+            }
+        }
+    }
+    
+    private var mainView: some View {
+        VStack(spacing: 30) {
+            if imageLoader.isLoading {
+                ProgressView("加载图片中...")
+                    .font(.title3)
+            } else if imageLoader.images.isEmpty {
+                VStack(spacing: 15) {
+                    Image(systemName: "photo.on.rectangle")
+                        .font(.system(size: 60))
+                        .foregroundColor(.orange)
+                    Text("文件夹中没有找到图片")
+                        .font(.title3)
+                        .foregroundColor(.secondary)
+                    
+                    Button("重新选择文件夹") {
+                        folderManager.selectFolder()
+                    }
+                    .foregroundColor(.blue)
+                }
+            } else {
+                drawingArea
+            }
+            
+            if !imageLoader.images.isEmpty {
+                statusView
+            }
+        }
+    }
+    
+    private var drawingArea: some View {
+        ZStack {
+            // Idle 提示（底层）
+            if !drawManager.isDrawing && !drawManager.showResult && !drawManager.isRestoring {
+                VStack(spacing: 15) {
+                    if shakeDetector.accelerometerAvailable {
+                        Image(systemName: "iphone.radiowaves.left.and.right")
+                            .font(.system(size: 80))
+                            .foregroundColor(.green)
+                            .scaleEffect(isShaking ? 1.2 : 1.0)
+                            .animation(.easeInOut(duration: 0.3), value: isShaking)
+                        Text("摇一摇手机")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                        Text("或点击下方按钮开始抽签")
+                            .foregroundColor(.secondary)
+                    } else {
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: 80))
+                            .foregroundColor(.green)
+                        Text("点击下方按钮开始抽签")
+                            .font(.title2)
+                            .fontWeight(.medium)
+                    }
+                    Button(action: {
+                        print("🔥 抽签按钮被点击")
+                        print("🔍 drawManager 已设置依赖")
+                        print("🔍 folderManager.hasPermission: \(folderManager.hasPermission)")
+                        print("🔍 imageLoader.images.count: \(imageLoader.images.count)")
+                        drawManager.performRandomDraw()
+                    }) {
+                        Text("抽签")
+                            .font(.title3)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 30)
+                            .padding(.vertical, 12)
+                            .background(Color.green)
+                            .cornerRadius(25)
+                    }
+                }
+                .frame(height: 300)
+            }
+
+            // 加载动画（中层）
+            if (drawManager.isDrawing || drawManager.isRestoring) && !drawManager.showResult {
+                LoadingAnimationView()
+                    .frame(height: 220)
+            }
+
+            // 结果（顶层），覆盖在加载动画之上实现无缝交接
+            if drawManager.showResult, let image = drawManager.currentImage {
+                ResultImageView(image: image)
+                    .onAppear { print("🖥️ 显示结果图片界面") }
+            }
+        }
+    }
+    
+    private var statusView: some View {
+        VStack {
+            // 只保留再次抽签按钮
+            if drawManager.showResult {
+                Button(action: {
+                    drawManager.performRandomDraw()
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("抽签")
+                            .font(.system(size: 17, weight: .semibold, design: .rounded))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 14)
+                    .background(
+                        LinearGradient(
+                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+                    .cornerRadius(24)
+                    .shadow(color: Color.green.opacity(0.3), radius: 8, x: 0, y: 4)
+                }
+                .scaleEffect(1.0)
+                .animation(.easeInOut(duration: 0.1), value: drawManager.showResult)
+            }
+        }
+    }
+}
+
+
+// 苹果风格加载动画：多层次视觉元素组合
+struct LoadingAnimationView: View {
+    @State private var rotate = false
+    @State private var innerRotate = false
+    @State private var scale = 1.0
+    @State private var opacity = 0.0
+    @State private var dotsRotation = 0.0
+    @State private var breathe = false
+    
+    var body: some View {
+        VStack(spacing: 20) {
+            ZStack {
+                // 外层背景圆环
+                Circle()
+                    .stroke(Color.primary.opacity(0.06), lineWidth: 2)
+                    .frame(width: 80, height: 80)
+                
+                // 中层脉动圆环
+                Circle()
+                    .stroke(Color.blue.opacity(0.15), lineWidth: 1.5)
+                    .frame(width: 64, height: 64)
+                    .scaleEffect(breathe ? 1.05 : 0.95)
+                    .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: breathe)
+                
+                // 主旋转弧形
+                Circle()
+                    .trim(from: 0, to: 0.7)
+                    .stroke(
+                        AngularGradient(
+                            gradient: Gradient(colors: [
+                                Color.blue.opacity(0.1),
+                                Color.blue.opacity(0.8),
+                                Color.blue
+                            ]),
+                            center: .center
+                        ),
+                        style: StrokeStyle(lineWidth: 3, lineCap: .round)
+                    )
+                    .frame(width: 52, height: 52)
+                    .rotationEffect(.degrees(rotate ? 360 : 0))
+                    .animation(.linear(duration: 1.0).repeatForever(autoreverses: false), value: rotate)
+                
+                // 内层反向旋转弧形
+                Circle()
+                    .trim(from: 0.2, to: 0.5)
+                    .stroke(
+                        Color.blue.opacity(0.6),
+                        style: StrokeStyle(lineWidth: 2, lineCap: .round)
+                    )
+                    .frame(width: 32, height: 32)
+                    .rotationEffect(.degrees(innerRotate ? -360 : 0))
+                    .animation(.linear(duration: 1.5).repeatForever(autoreverses: false), value: innerRotate)
+                
+                // 中心点缀小圆点
+                ForEach(0..<3, id: \.self) { index in
+                    Circle()
+                        .fill(Color.blue.opacity(0.4))
+                        .frame(width: 3, height: 3)
+                        .offset(x: 12)
+                        .rotationEffect(.degrees(Double(index) * 120 + dotsRotation))
+                }
+                .animation(.linear(duration: 2.0).repeatForever(autoreverses: false), value: dotsRotation)
+            }
+            .scaleEffect(scale)
+            .opacity(opacity)
+            .onAppear {
+                withAnimation(.easeOut(duration: 0.4)) {
+                    scale = 1.0
+                    opacity = 1.0
+                }
+                rotate = true
+                innerRotate = true
+                breathe = true
+                dotsRotation = 360
+            }
+            
+            // 文字标签
+            VStack(spacing: 6) {
+                Text("抽签中")
+                    .font(.system(size: 17, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary)
+                
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { index in
+                        Circle()
+                            .fill(Color.blue.opacity(0.6))
+                            .frame(width: 4, height: 4)
+                            .scaleEffect(breathe ? (index % 2 == 0 ? 1.2 : 0.8) : (index % 2 == 0 ? 0.8 : 1.2))
+                            .animation(
+                                .easeInOut(duration: 0.8)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.2),
+                                value: breathe
+                            )
+                    }
+                }
+            }
+            .opacity(opacity * 0.8)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct ResultImageView: View {
+    let image: UIImage
+    @State private var offsetY: CGFloat = 0
+    @State private var scale = 0.9
+    @State private var opacity = 0.0
+    @State private var bounceScale = 1.0
+    @State private var rotation: Double = 0
+    
+    // 计算图片显示尺寸，针对竖屏图片优化
+    private var imageDisplaySize: CGSize {
+        let screenSize = UIScreen.main.bounds.size
+        let imageSize = image.size
+        let aspectRatio = imageSize.width / imageSize.height
+        
+        // 判断是否为竖屏图片
+        let isPortrait = aspectRatio < 1.0
+        
+        if isPortrait {
+            // 竖屏图片：允许更高的显示高度，占用更多屏幕空间
+            let maxHeight = screenSize.height * 0.65 // 从300提升到屏幕高度的65%
+            let maxWidth = screenSize.width * 0.85
+            
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        } else {
+            // 横屏图片：维持原有逻辑
+            let maxHeight: CGFloat = 300
+            let maxWidth = screenSize.width * 0.9
+            
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        }
+    }
+    
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: imageDisplaySize.width, height: imageDisplaySize.height)
+            .cornerRadius(16)
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
+            .scaleEffect(scale * bounceScale)
+            .rotationEffect(.degrees(rotation))
+            .opacity(opacity)
+            .offset(y: offsetY)
+            .onAppear {
+                // 快速、干净的弹出
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                    scale = 1.0
+                    opacity = 1.0
+                }
+                // 轻微二段回弹
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.14) {
+                    withAnimation(.spring(response: 0.18, dampingFraction: 0.5)) { bounceScale = 1.02 }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
+                        withAnimation(.spring(response: 0.2, dampingFraction: 0.75)) { bounceScale = 1.0 }
+                    }
+                }
+                // 触感
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            }
+    }
+}
+
+
+#Preview {
+    ContentView()
+}
