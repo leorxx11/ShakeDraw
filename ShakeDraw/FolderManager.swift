@@ -85,13 +85,8 @@ class FolderManager: ObservableObject {
         }
     }
     
-    func stopAccessing() {
-        selectedFolderURL?.stopAccessingSecurityScopedResource()
-        hasPermission = false
-    }
-    
     func clearFolder() {
-        print("🗑️ 清除文件夹和相关数据")
+        print("🗑️ 清除文件夹访问权限与书签")
         
         // 停止访问当前文件夹
         selectedFolderURL?.stopAccessingSecurityScopedResource()
@@ -99,22 +94,11 @@ class FolderManager: ObservableObject {
         // 清除用户数据
         UserDefaults.standard.removeObject(forKey: bookmarkKey)
         
-        // 清除RandomDrawManager相关的缓存数据
-        UserDefaults.standard.removeObject(forKey: "ShakeDraw_LastResultRelativePath")
-        UserDefaults.standard.removeObject(forKey: "ShakeDraw_LastResultFolderPath")
-        
-        // 清除缓存预览图片
-        if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-            let previewURL = cacheURL.appendingPathComponent("last_result_preview.jpg")
-            try? FileManager.default.removeItem(at: previewURL)
-            print("🗑️ 已删除预览缓存: \(previewURL.path)")
-        }
-        
         // 重置状态
         selectedFolderURL = nil
         hasPermission = false
         
-        print("✅ 文件夹和相关数据已清除")
+        print("✅ 文件夹访问权限与书签已清除")
     }
 }
 

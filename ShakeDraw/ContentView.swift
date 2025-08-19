@@ -82,6 +82,10 @@ struct ContentView: View {
                                     drawManager.clearAllData()
                                     imageLoader.images.removeAll()
                                     folderManager.clearFolder()
+                                    // 确保返回欢迎界面时不再保留上次背景
+                                    withAnimation(.easeOut(duration: 0.2)) {
+                                        backgroundImage = nil
+                                    }
                                 }) {
                                     Label("清除", systemImage: "trash")
                                 }
@@ -135,6 +139,14 @@ struct ContentView: View {
                     backgroundImage = img
                 }
             }
+            .onChange(of: folderManager.hasPermission) { _, hasPermission in
+                // 失去权限（回到欢迎界面）时，清空背景以避免残留
+                if hasPermission == false {
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        backgroundImage = nil
+                    }
+                }
+            }
         }
     }
     
@@ -143,12 +155,8 @@ struct ContentView: View {
             return
         }
         
-        // 先检查是否有上次结果，若有，先进入恢复流程，避免短暂显示初始界面
-        if drawManager.hasStoredResult() {
-            // 立即显示加载指示，而非初始界面
-            drawManager.isRestoring = true
-            drawManager.restoreLastResultIfAvailable()
-        }
+        // 统一通过 Manager 的恢复接口处理，避免重复逻辑
+        drawManager.startRestoreIfNeeded()
         imageLoader.loadImages(from: folderURL)
     }
     
@@ -278,10 +286,12 @@ struct ContentView: View {
                             .fontWeight(.medium)
                     }
                     Button(action: {
+                        #if DEBUG
                         print("🔥 抽签按钮被点击")
                         print("🔍 drawManager 已设置依赖")
                         print("🔍 folderManager.hasPermission: \(folderManager.hasPermission)")
                         print("🔍 imageLoader.images.count: \(imageLoader.images.count)")
+                        #endif
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                             drawManager.performRandomDraw()
@@ -315,7 +325,11 @@ struct ContentView: View {
             // 结果（顶层），覆盖在加载动画之上实现无缝交接
             if drawManager.showResult, let image = drawManager.currentImage {
                 ResultImageView(image: image)
-                    .onAppear { print("🖥️ 显示结果图片界面") }
+                    .onAppear {
+                        #if DEBUG
+                        print("🖥️ 显示结果图片界面")
+                        #endif
+                    }
             }
         }
     }
@@ -462,11 +476,9 @@ struct LoadingAnimationView: View {
 
 struct ResultImageView: View {
     let image: UIImage
-    @State private var offsetY: CGFloat = 0
     @State private var scale = 0.9
     @State private var opacity = 0.0
     @State private var bounceScale = 1.0
-    @State private var rotation: Double = 0
     
     // 计算图片显示尺寸，针对竖屏图片优化
     private var imageDisplaySize: CGSize {
@@ -514,9 +526,7 @@ struct ResultImageView: View {
             .cornerRadius(16)
             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
             .scaleEffect(scale * bounceScale)
-            .rotationEffect(.degrees(rotation))
             .opacity(opacity)
-            .offset(y: offsetY)
             .onAppear {
                 // 快速、干净的弹出
                 withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {

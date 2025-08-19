@@ -284,9 +284,5 @@ class RandomDrawManager: ObservableObject {
         }
     }
     
-    // 兼容旧接口（不再使用）
-    func commitReveal() {
-        isDrawing = false
-        showResult = true
-    }
+    // 兼容旧接口已移除（不再使用）
 }
