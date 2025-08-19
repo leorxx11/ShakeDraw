@@ -107,6 +107,39 @@ struct ContentView: View {
                     
                     Spacer()
                 }
+
+                // 左下角常驻抽签按钮（仅在已授权且有图片时显示）
+                if folderManager.hasPermission && !imageLoader.images.isEmpty {
+                    VStack {
+                        Spacer()
+                        HStack {
+                        Button(action: {
+                            guard !drawManager.isDrawing, !drawManager.isRestoring else { return }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            drawManager.performRandomDraw() // 立即开始，避免空闲闪屏
+                        }) {
+                                Image(systemName: "die.face.5.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                    .padding(12)
+                                    .background(
+                                        Circle()
+                                            .fill(.regularMaterial)
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                    )
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            }
+                            .disabled(drawManager.isDrawing || drawManager.isRestoring)
+                            
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 16)
+                    }
+                }
             }
             .navigationBarHidden(true)
             .onAppear {
@@ -198,7 +231,7 @@ struct ContentView: View {
                         Image(systemName: "2.circle.fill")
                             .foregroundColor(.blue)
                             .font(.title2)
-                        Text("摇动手机或点击按钮抽签")
+                        Text("摇动手机或点左下角按钮抽签")
                             .font(.body)
                             .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -265,108 +298,38 @@ struct ContentView: View {
         ZStack {
             // Idle 提示（底层）
             if !drawManager.isDrawing && !drawManager.showResult && !drawManager.isRestoring {
-                VStack(spacing: 15) {
-                    if shakeDetector.accelerometerAvailable {
-                        Image(systemName: "iphone.radiowaves.left.and.right")
-                            .font(.system(size: 80))
-                            .foregroundColor(.green)
-                            .scaleEffect(isShaking ? 1.2 : 1.0)
-                            .animation(.easeInOut(duration: 0.3), value: isShaking)
-                        Text("摇一摇手机")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                        Text("或点击下方按钮开始抽签")
-                            .foregroundColor(.secondary)
-                    } else {
-                        Image(systemName: "hand.tap")
-                            .font(.system(size: 80))
-                            .foregroundColor(.green)
-                        Text("点击下方按钮开始抽签")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                    }
-                    Button(action: {
-                        #if DEBUG
-                        print("🔥 抽签按钮被点击")
-                        print("🔍 drawManager 已设置依赖")
-                        print("🔍 folderManager.hasPermission: \(folderManager.hasPermission)")
-                        print("🔍 imageLoader.images.count: \(imageLoader.images.count)")
-                        #endif
-                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            drawManager.performRandomDraw()
-                        }
-                    }) {
-                        Text("抽签")
-                            .font(.title3)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 30)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule().fill(.ultraThinMaterial)
-                            )
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(PressableTranslucentCapsuleStyle())
+                VStack(spacing: 12) {
+                    Image(systemName: "iphone.radiowaves.left.and.right")
+                        .font(.system(size: 80))
+                        .foregroundColor(.green)
+                        .scaleEffect(isShaking ? 1.2 : 1.0)
+                        .animation(.easeInOut(duration: 0.3), value: isShaking)
+                    Text("摇一摇手机开始抽签")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                    Text("左下角按钮也可")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
                 .frame(height: 300)
             }
 
-            // 加载动画（中层）
-            if (drawManager.isDrawing || drawManager.isRestoring) && !drawManager.showResult {
-                LoadingAnimationView()
-                    .frame(height: 220)
-            }
-
-            // 结果（顶层），覆盖在加载动画之上实现无缝交接
+            // 结果（中层）
             if drawManager.showResult, let image = drawManager.currentImage {
-                ResultImageView(image: image)
+                CrossfadeResultView(image: image)
                     .onAppear {
                         #if DEBUG
-                        print("🖥️ 显示结果图片界面")
+                        print("🖥️ 显示结果图片界面（交叉淡入）")
                         #endif
                     }
             }
+
+            // 按需求移除“抽签中”字样与动画覆盖层
         }
     }
     
     private var statusView: some View {
-        VStack {
-            // 只保留再次抽签按钮
-            if drawManager.showResult {
-                Button(action: {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        drawManager.performRandomDraw()
-                    }
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("抽签")
-                            .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    }
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 28)
-                    .padding(.vertical, 14)
-                    .background(
-                        Capsule().fill(.ultraThinMaterial)
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
-                }
-                .buttonStyle(PressableTranslucentCapsuleStyle())
-                .scaleEffect(1.0)
-                .animation(.easeInOut(duration: 0.1), value: drawManager.showResult)
-            }
-        }
+        VStack { EmptyView() }
     }
 }
 
@@ -523,7 +486,13 @@ struct ResultImageView: View {
             .resizable()
             .aspectRatio(contentMode: .fit)
             .frame(width: imageDisplaySize.width, height: imageDisplaySize.height)
-            .cornerRadius(16)
+            .id(ObjectIdentifier(image)) // 强制视图在替换缩略图->原图时完全重建，避免蒙版丢失
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .compositingGroup() // 确保裁剪与后续效果一致应用
             .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
             .scaleEffect(scale * bounceScale)
             .opacity(opacity)
@@ -543,6 +512,97 @@ struct ResultImageView: View {
                 // 触感
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             }
+    }
+}
+
+// 静态图片卡片（统一样式，无入场弹跳），用于交叉淡入容器
+struct ResultImageCard: View {
+    let image: UIImage
+
+    private var imageDisplaySize: CGSize {
+        let screenSize = UIScreen.main.bounds.size
+        let imageSize = image.size
+        let aspectRatio = imageSize.width / imageSize.height
+        let isPortrait = aspectRatio < 1.0
+        if isPortrait {
+            let maxHeight = screenSize.height * 0.65
+            let maxWidth = screenSize.width * 0.85
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        } else {
+            let maxHeight: CGFloat = 300
+            let maxWidth = screenSize.width * 0.9
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        }
+    }
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: imageDisplaySize.width, height: imageDisplaySize.height)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
+    }
+}
+
+// 两张图片之间的交叉淡入过渡容器
+struct CrossfadeResultView: View {
+    let image: UIImage
+    @State private var backImage: UIImage?
+    @State private var frontImage: UIImage?
+    @State private var showFront = true
+
+    var body: some View {
+        ZStack {
+            if let back = backImage {
+                ResultImageCard(image: back)
+                    .opacity(showFront ? 0 : 1)
+                    .animation(.easeInOut(duration: 0.28), value: showFront)
+            }
+            if let front = frontImage {
+                ResultImageCard(image: front)
+                    .opacity(showFront ? 1 : 0)
+                    .scaleEffect(showFront ? 1.0 : 0.985)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFront)
+            }
+        }
+        .onAppear {
+            // 初次显示
+            frontImage = image
+            backImage = nil
+            showFront = true
+        }
+        .onChange(of: image) { _, new in
+            // 切换到新图：先把当前front放到背后，再把新图放在前面，触发淡入
+            backImage = frontImage
+            frontImage = new
+            showFront = false
+            // 下一帧开始淡入
+            DispatchQueue.main.async {
+                withAnimation { showFront = true }
+                // 动画完成后释放背面图，节省内存
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                    if showFront { backImage = nil }
+                }
+            }
+        }
     }
 }
 

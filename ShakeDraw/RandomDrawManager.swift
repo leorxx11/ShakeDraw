@@ -52,8 +52,9 @@ class RandomDrawManager: ObservableObject {
         }
         
         print("✅ 权限检查通过，开始抽签")
-        showResult = false
-        currentImage = nil
+        // 先进入“抽签中”状态，避免短暂闪回 Idle 提示
+        isDrawing = true
+        // 保留当前结果在加载覆盖层下，避免空白/闪屏
         pendingTargetURL = nil
         pendingTargetImage = nil
 
@@ -76,8 +77,7 @@ class RandomDrawManager: ObservableObject {
             }
         }
 
-        // 目标已就位后再进入抽取动画阶段
-        isDrawing = true
+        // 目标已就位后等待最短时长再揭示
 
         // 等待最短加载时长后展示结果
         finalizeAfter(minDelay: preSpinDuration, startedAt: startTime)
