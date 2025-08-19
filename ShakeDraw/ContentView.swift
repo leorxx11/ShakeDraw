@@ -14,10 +14,19 @@ struct ContentView: View {
     @StateObject private var shakeDetector = ShakeDetector()
     @StateObject private var drawManager = RandomDrawManager()
     @State private var isShaking = false
+    // 保留最近结果用于背景，即便 currentImage 暂时被置空
+    @State private var backgroundImage: UIImage?
     
     var body: some View {
         NavigationView {
             ZStack {
+                // 高斯模糊背景：使用最近结果图片作为背景
+                if let bg = backgroundImage {
+                    BlurredBackgroundView(image: bg, blurRadius: 24)
+                        .ignoresSafeArea()
+                        .transition(.opacity)
+                        .allowsHitTesting(false)
+                }
                 VStack(spacing: 20) {
                     if !folderManager.hasPermission {
                         setupView
@@ -100,6 +109,8 @@ struct ContentView: View {
                 drawManager.setDependencies(imageLoader: imageLoader, folderManager: folderManager)
                 // 在任何权限判断之前，优先展示缓存预览（若存在）
                 drawManager.showCachedPreviewIfAny()
+                // 初始化背景图
+                backgroundImage = drawManager.currentImage
                 
                 shakeDetector.setShakeCallback {
                     if folderManager.hasPermission && !imageLoader.images.isEmpty {
@@ -118,6 +129,11 @@ struct ContentView: View {
             .onChange(of: folderManager.selectedFolderURL) { _, _ in
                 // 文件夹URL发生变化时重新加载图片
                 loadImagesIfNeeded()
+            }
+            .onChange(of: drawManager.currentImage) { _, newImage in
+                if let img = newImage {
+                    backgroundImage = img
+                }
             }
         }
     }
@@ -266,17 +282,26 @@ struct ContentView: View {
                         print("🔍 drawManager 已设置依赖")
                         print("🔍 folderManager.hasPermission: \(folderManager.hasPermission)")
                         print("🔍 imageLoader.images.count: \(imageLoader.images.count)")
-                        drawManager.performRandomDraw()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            drawManager.performRandomDraw()
+                        }
                     }) {
                         Text("抽签")
                             .font(.title3)
                             .fontWeight(.medium)
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .padding(.horizontal, 30)
                             .padding(.vertical, 12)
-                            .background(Color.green)
-                            .cornerRadius(25)
+                            .background(
+                                Capsule().fill(.ultraThinMaterial)
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                            )
                     }
+                    .buttonStyle(PressableTranslucentCapsuleStyle())
                 }
                 .frame(height: 300)
             }
@@ -300,7 +325,10 @@ struct ContentView: View {
             // 只保留再次抽签按钮
             if drawManager.showResult {
                 Button(action: {
-                    drawManager.performRandomDraw()
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        drawManager.performRandomDraw()
+                    }
                 }) {
                     HStack(spacing: 8) {
                         Image(systemName: "arrow.clockwise")
@@ -308,19 +336,19 @@ struct ContentView: View {
                         Text("抽签")
                             .font(.system(size: 17, weight: .semibold, design: .rounded))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                     .padding(.horizontal, 28)
                     .padding(.vertical, 14)
                     .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [Color.green, Color.green.opacity(0.8)]),
-                            startPoint: .top,
-                            endPoint: .bottom
-                        )
+                        Capsule().fill(.ultraThinMaterial)
                     )
-                    .cornerRadius(24)
-                    .shadow(color: Color.green.opacity(0.3), radius: 8, x: 0, y: 4)
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.primary.opacity(0.15), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 4)
                 }
+                .buttonStyle(PressableTranslucentCapsuleStyle())
                 .scaleEffect(1.0)
                 .animation(.easeInOut(duration: 0.1), value: drawManager.showResult)
             }
@@ -505,6 +533,40 @@ struct ResultImageView: View {
                 // 触感
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
             }
+    }
+}
+
+// 模糊背景视图
+struct BlurredBackgroundView: View {
+    let image: UIImage
+    var blurRadius: CGFloat = 20
+    
+    var body: some View {
+        GeometryReader { proxy in
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .clipped()
+                .blur(radius: blurRadius, opaque: true)
+                .saturation(0.9)
+                .overlay(Color.black.opacity(0.08))
+        }
+    }
+}
+
+// 透明胶囊按钮按压样式：轻微缩放 + 强调色淡叠加
+struct PressableTranslucentCapsuleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .contentShape(Capsule())
+            .overlay(
+                Capsule()
+                    .fill(Color.accentColor.opacity(configuration.isPressed ? 0.28 : 0.12))
+            )
+            .brightness(configuration.isPressed ? -0.05 : 0)
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
