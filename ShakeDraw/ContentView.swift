@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var isShaking = false
     // 保留最近结果用于背景，即便 currentImage 暂时被置空
     @State private var backgroundImage: UIImage?
+    @State private var showSettings = false
     
     var body: some View {
         NavigationView {
@@ -64,34 +65,12 @@ struct ContentView: View {
                     }
                 }
                 
-                // 右上角菜单按钮 - 始终显示
+                // 右上角设置按钮 - 始终显示
                 VStack {
                     HStack {
                         Spacer()
-                        
-                        Menu {
-                            Button(action: {
-                                folderManager.selectFolder()
-                            }) {
-                                Label("从文件导入", systemImage: "folder.badge.plus")
-                            }
-                            
-                            if folderManager.hasPermission {
-                                Button(role: .destructive, action: {
-                                    // 清除所有数据
-                                    drawManager.clearAllData()
-                                    imageLoader.images.removeAll()
-                                    folderManager.clearFolder()
-                                    // 确保返回欢迎界面时不再保留上次背景
-                                    withAnimation(.easeOut(duration: 0.2)) {
-                                        backgroundImage = nil
-                                    }
-                                }) {
-                                    Label("清除", systemImage: "trash")
-                                }
-                            }
-                        } label: {
-                            Image(systemName: folderManager.hasPermission ? "ellipsis.circle" : "plus.circle")
+                        Button(action: { showSettings = true }) {
+                            Image(systemName: "gearshape")
                                 .font(.system(size: 16, weight: .medium))
                                 .foregroundColor(.blue)
                                 .padding(10)
@@ -106,6 +85,20 @@ struct ContentView: View {
                     .padding(.top, 10)
                     
                     Spacer()
+                }
+                .sheet(isPresented: $showSettings, onDismiss: {
+                    // 返回时刷新图片列表
+                    loadImagesIfNeeded()
+                }) {
+                    NavigationView {
+                        SettingsView(folderManager: folderManager)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .navigationBarLeading) {
+                                    Button("关闭") { showSettings = false }
+                                }
+                            }
+                    }
                 }
 
                 // 左下角常驻抽签按钮（仅在已授权且有图片时显示）
@@ -163,8 +156,8 @@ struct ContentView: View {
                 
                 loadImagesIfNeeded()
             }
-            .onChange(of: folderManager.selectedFolderURL) { _, _ in
-                // 文件夹URL发生变化时重新加载图片
+            .onChange(of: folderManager.folders) { _, _ in
+                // 文件夹列表变化时重新加载图片
                 loadImagesIfNeeded()
             }
             .onChange(of: drawManager.currentImage) { _, newImage in
@@ -184,13 +177,15 @@ struct ContentView: View {
     }
     
     private func loadImagesIfNeeded() {
-        guard folderManager.hasPermission, let folderURL = folderManager.selectedFolderURL else {
+        guard folderManager.hasPermission else {
             return
         }
         
+        let urls = folderManager.includedFolderURLs()
+        guard !urls.isEmpty else { return }
         // 统一通过 Manager 的恢复接口处理，避免重复逻辑
         drawManager.startRestoreIfNeeded()
-        imageLoader.loadImages(from: folderURL)
+        imageLoader.loadImages(from: urls)
     }
     
     private var setupView: some View {
@@ -219,7 +214,7 @@ struct ContentView: View {
                         Image(systemName: "1.circle.fill")
                             .foregroundColor(.blue)
                             .font(.title2)
-                        Text("点击右上角导入图片文件夹")
+                        Text("点击右上角设置导入图片文件夹")
                             .font(.body)
                             .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -279,9 +274,7 @@ struct ContentView: View {
                         .font(.title3)
                         .foregroundColor(.secondary)
                     
-                    Button("重新选择文件夹") {
-                        folderManager.selectFolder()
-                    }
+                    Button("打开设置") { showSettings = true }
                     .foregroundColor(.blue)
                 }
             } else {

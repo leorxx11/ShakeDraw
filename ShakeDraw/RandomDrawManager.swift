@@ -67,7 +67,7 @@ class RandomDrawManager: ObservableObject {
             
             // 后台预加载目标全图
             DispatchQueue.global(qos: .userInitiated).async {
-                let parentFolderURL = folderManager.selectedFolderURL
+                let parentFolderURL = folderManager.parentFolder(for: targetURL)
                 let loaded = imageLoader.loadUIImage(from: targetURL, parentFolderURL: parentFolderURL)
                 let targetImage = loaded.flatMap { imageLoader.predecode($0) }
                 DispatchQueue.main.async {
@@ -138,7 +138,7 @@ class RandomDrawManager: ObservableObject {
                 if let img = self.currentImage { self.savePreviewIfPossible(from: img) }
                 print("🎯 设置结果完成 - 使用预载图片: true")
             } else if let url = self.pendingTargetURL, let loader = self.imageLoader {
-                let parent = self.folderManager?.selectedFolderURL
+                let parent = self.folderManager?.parentFolder(for: url)
                 // A: 先尝试生成缩略图，尽快揭示
                 DispatchQueue.global(qos: .userInitiated).async {
                     let thumb = loader.loadThumbnail(from: url, parentFolderURL: parent, maxDimension: 600)
@@ -170,7 +170,10 @@ class RandomDrawManager: ObservableObject {
                 // 兜底随机一次，也放到后台
                 DispatchQueue.global(qos: .userInitiated).async {
                     let url = self.imageLoader?.getRandomImage(excluding: self.currentImageURL)
-                    let loaded = url.flatMap { self.imageLoader?.loadUIImage(from: $0, parentFolderURL: self.folderManager?.selectedFolderURL) }
+                    let loaded = url.flatMap { u in
+                        let parent = self.folderManager?.parentFolder(for: u)
+                        return self.imageLoader?.loadUIImage(from: u, parentFolderURL: parent)
+                    }
                     let decoded = loaded.flatMap { self.imageLoader?.predecode($0) }
                     DispatchQueue.main.async {
                         self.currentImage = decoded
@@ -187,10 +190,10 @@ class RandomDrawManager: ObservableObject {
 
     // 保存最后结果（相对路径）
     private func saveLastResult(url: URL) {
-        guard let folder = folderManager?.selectedFolderURL else { return }
-        let folderPath = folder.standardizedFileURL.path
+        let parent = folderManager?.parentFolder(for: url)
+        let folderPath = parent?.standardizedFileURL.path ?? ""
         let filePath = url.standardizedFileURL.path
-        if filePath.hasPrefix(folderPath) {
+        if !folderPath.isEmpty && filePath.hasPrefix(folderPath) {
             var rel = String(filePath.dropFirst(folderPath.count))
             if rel.hasPrefix("/") { rel.removeFirst() }
             UserDefaults.standard.set(rel, forKey: lastResultPathKey)
@@ -206,7 +209,7 @@ class RandomDrawManager: ObservableObject {
 
     // 恢复上次结果
     func restoreLastResultIfAvailable() {
-        guard let folder = folderManager?.selectedFolderURL, folderManager?.hasPermission == true else {
+        guard folderManager?.hasPermission == true else {
             print("ℹ️ 无法恢复：无文件夹权限")
             return
         }
@@ -220,11 +223,18 @@ class RandomDrawManager: ObservableObject {
         if stored.hasPrefix("/") || stored.hasPrefix("file://") {
             url = URL(fileURLWithPath: stored)
         } else {
-            url = folder.appendingPathComponent(stored)
+            // Compose from stored folder path
+            if let folderPath = UserDefaults.standard.string(forKey: lastFolderPathKey) {
+                url = URL(fileURLWithPath: folderPath).appendingPathComponent(stored)
+            } else {
+                // Fallback: treat as absolute (unlikely)
+                url = URL(fileURLWithPath: stored)
+            }
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            guard let img = self.imageLoader?.loadUIImage(from: url, parentFolderURL: folder),
+            let parent = self.folderManager?.parentFolder(for: url)
+            guard let img = self.imageLoader?.loadUIImage(from: url, parentFolderURL: parent),
                   let decoded = self.imageLoader?.predecode(img) else {
                 print("❌ 恢复上次结果失败: \(url.lastPathComponent)")
                 DispatchQueue.main.async { self.isRestoring = false }
@@ -245,10 +255,9 @@ class RandomDrawManager: ObservableObject {
 
     func hasStoredResult() -> Bool {
         guard let s = UserDefaults.standard.string(forKey: lastResultPathKey), !s.isEmpty else { return false }
-        guard let folder = folderManager?.selectedFolderURL else { return false }
-        let currentFolderPath = folder.standardizedFileURL.path
+        guard let folderPaths = folderManager?.allResolvedFolderURLs().map({ $0.standardizedFileURL.path }), !folderPaths.isEmpty else { return false }
         let storedFolderPath = UserDefaults.standard.string(forKey: lastFolderPathKey)
-        return storedFolderPath == currentFolderPath
+        return storedFolderPath != nil && folderPaths.contains(storedFolderPath!)
     }
 
     func startRestoreIfNeeded() {

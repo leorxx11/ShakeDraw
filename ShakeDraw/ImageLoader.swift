@@ -9,53 +9,43 @@ class ImageLoader: ObservableObject {
     private let supportedImageTypes: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
     private var parentFolderURL: URL?
     
-    func loadImages(from folderURL: URL) {
-        print("🖼️ 开始加载图片，文件夹: \(folderURL.path)")
+    func loadImages(from folderURLs: [URL]) {
+        let paths = folderURLs.map { $0.path }.joined(separator: ", ")
+        print("🖼️ 开始加载图片，文件夹集合: [\(paths)]")
         isLoading = true
         images.removeAll()
-        parentFolderURL = folderURL
-        
+
         DispatchQueue.global(qos: .userInitiated).async {
-            var imageURLs: [URL] = []
-            
-            let startAccess = folderURL.startAccessingSecurityScopedResource()
-            defer {
-                if startAccess {
-                    folderURL.stopAccessingSecurityScopedResource()
-                }
-            }
-            
-            print("🖼️ 安全访问权限: \(startAccess)")
-            
-            guard startAccess else {
-                print("❌ 无法获取文件夹访问权限")
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                }
-                return
-            }
-            
-            if let enumerator = FileManager.default.enumerator(at: folderURL, includingPropertiesForKeys: [.isRegularFileKey, .nameKey], options: [.skipsHiddenFiles]) {
-                
-                for case let fileURL as URL in enumerator {
-                    do {
-                        let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .nameKey])
-                        if resourceValues.isRegularFile == true && self.isImageFile(fileURL) {
-                            imageURLs.append(fileURL)
-                            print("🖼️ 找到图片: \(resourceValues.name ?? fileURL.lastPathComponent)")
+            var imageSet: Set<URL> = []
+
+            for folderURL in folderURLs {
+                let startAccess = folderURL.startAccessingSecurityScopedResource()
+                defer { if startAccess { folderURL.stopAccessingSecurityScopedResource() } }
+
+                print("🖼️ [\(folderURL.lastPathComponent)] 安全访问权限: \(startAccess)")
+                guard startAccess else { continue }
+
+                if let enumerator = FileManager.default.enumerator(at: folderURL, includingPropertiesForKeys: [.isRegularFileKey, .nameKey], options: [.skipsHiddenFiles]) {
+                    for case let fileURL as URL in enumerator {
+                        do {
+                            let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .nameKey])
+                            if resourceValues.isRegularFile == true && self.isImageFile(fileURL) {
+                                imageSet.insert(fileURL)
+                            }
+                        } catch {
+                            print("❌ 检查文件错误: \(error)")
                         }
-                    } catch {
-                        print("❌ 检查文件错误: \(error)")
                     }
+                } else {
+                    print("❌ 无法创建文件枚举器: \(folderURL.path)")
                 }
-            } else {
-                print("❌ 无法创建文件枚举器")
             }
-            
-            print("🖼️ 总共找到 \(imageURLs.count) 张图片")
-            
+
+            let result = Array(imageSet)
+            print("🖼️ 总共找到 \(result.count) 张图片（合并去重）")
+
             DispatchQueue.main.async {
-                self.images = imageURLs.shuffled()
+                self.images = result.shuffled()
                 self.isLoading = false
             }
         }
