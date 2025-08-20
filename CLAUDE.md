@@ -24,6 +24,7 @@ ShakeDraw is an iOS app that allows users to randomly select images from a folde
 ```
 ShakeDraw/
 ├── ContentView.swift          # Main UI coordinator and state management
+├── SettingsView.swift         # Settings root (two entries: 奖池/系数; radar chart & reset)
 ├── FolderManager.swift        # File access, security-scoped resources, bookmarks
 ├── ImageLoader.swift          # Image loading, caching, format support
 ├── RandomDrawManager.swift    # Draw logic, result persistence, state machine
@@ -38,10 +39,10 @@ ShakeDraw/
 ### Component Responsibilities
 
 **FolderManager**: 
-- Handles UIDocumentPickerViewController for folder selection
+- Handles multi-folder selection via UIDocumentPickerViewController
 - Manages security-scoped resource access with `startAccessingSecurityScopedResource()`
-- Persists folder access using bookmark data in UserDefaults
-- Key methods: `selectFolder()`, `setSelectedFolder()`, `clearFolder()`
+- Persists access using bookmark data in UserDefaults
+- Key methods: `selectFolders()`, `addFolders(urls:)`, `removeFolder(id:)`, `clearAllFolders()`
 
 **ImageLoader**:
 - Scans folders recursively for supported image formats (jpg, png, heic, etc.)
@@ -96,7 +97,7 @@ ShakeDraw/
 **Background Blur**: Adjust `BlurredBackgroundView(blurRadius:)` parameter (default: 24)
 **Button Feedback**: Modify `PressableTranslucentCapsuleStyle` opacity values (0.12 idle, 0.28 pressed) and scale (0.96 when pressed)
 **Loading Animation**: Customize rotation speeds and visual elements in `LoadingAnimationView`
-**Image Display**: Portrait image height ratio controlled in `ResultImageView.imageDisplaySize` (currently 65% of screen height)
+**Image Display**: Portrait ≈ 70% screen height, landscape ≈ 40%, width up to 92% (see `ResultImageView.imageDisplaySize`)
 
 ## Important Development Notes
 
