@@ -20,7 +20,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var isSlideshow = false
     @State private var slideshowTimer: Timer?
-    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 3.0
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 1.0
     
     var body: some View {
         let mainContent = NavigationView {
@@ -718,7 +718,27 @@ struct CrossfadeResultView: View {
     // 体感跟随（视差）
     @StateObject private var parallax = MotionParallaxManager()
     @AppStorage("parallaxEnabled") private var parallaxEnabled: Bool = true
-    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.6 // 0.0~1.0
+    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.85 // 0.0~1.0（默认推荐 85%）
+    // 交互范围设置（拖拽与缩放）
+    @AppStorage("panLimitFractionX") private var panLimitFractionX: Double = 0.20 // 水平相对屏幕比例（默认推荐 20%）
+    @AppStorage("panLimitFractionY") private var panLimitFractionY: Double = 0.20 // 垂直相对屏幕比例（默认推荐 20%）
+    @AppStorage("zoomMin") private var zoomMin: Double = 0.9
+    @AppStorage("zoomMax") private var zoomMax: Double = 2.0
+    // 回弹参数（用户可在设置中自定义）：速度与幅度
+    @AppStorage("reboundSpeed") private var reboundSpeed: Double = 0.40   // 响应时间（s），越小越快，建议 0.1~0.6（默认推荐 0.40）
+    @AppStorage("reboundDamping") private var reboundDamping: Double = 0.85 // 阻尼（0~1），越大越干净（默认推荐 0.85）
+    // 拖拽边界触达去抖
+    @State private var didHitEdgeX = false
+    @State private var didHitEdgeY = false
+    @State private var didHitZoomMin = false
+    @State private var didHitZoomMax = false
+
+    // 基于设置生成统一回弹动画
+    private var reboundAnimation: Animation {
+        let resp = max(0.1, min(0.6, reboundSpeed))
+        let damp = max(0.6, min(1.0, reboundDamping))
+        return .spring(response: resp, dampingFraction: damp)
+    }
 
     private var isInteracting: Bool {
         (abs(magnifyBy - 1.0) > 0.001) || (abs(dragOffset.width) > 0.5) || (abs(dragOffset.height) > 0.5)
@@ -751,8 +771,8 @@ struct CrossfadeResultView: View {
                     .opacity(showFront ? 0 : 1)
                     .animation(.easeInOut(duration: 0.28), value: showFront)
                     // 当手势结束、GestureState 复位时，使用弹簧回弹动画
-                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: magnifyBy)
-                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: dragOffset)
+                    .animation(reboundAnimation, value: magnifyBy)
+                    .animation(reboundAnimation, value: dragOffset)
             }
             if let front = frontImage {
                 ZoomableImageCard(image: front, scale: scale, offset: offset, magnifyBy: magnifyBy, dragOffset: dragOffset)
@@ -763,19 +783,75 @@ struct CrossfadeResultView: View {
                     .scaleEffect(showFront ? 1.0 : 0.985)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFront)
                     // 当手势结束、GestureState 复位时，使用弹簧回弹动画
-                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: magnifyBy)
-                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: dragOffset)
+                    .animation(reboundAnimation, value: magnifyBy)
+                    .animation(reboundAnimation, value: dragOffset)
             }
         }
         .gesture(
             SimultaneousGesture(
                 MagnificationGesture()
                     .updating($magnifyBy) { currentState, gestureState, _ in
-                        gestureState = currentState
+                        // 规范缩放范围
+                        let minZ = max(0.5, zoomMin)
+                        let maxZ = min(3.0, max(zoomMax, minZ + 0.05))
+                        let eff = min(max(currentState, minZ), maxZ)
+                        gestureState = eff
+                    }
+                    .onChanged { value in
+                        // 触达缩放边界时触发一次触觉反馈
+                        let minZ = max(0.5, zoomMin)
+                        let maxZ = min(3.0, max(zoomMax, minZ + 0.05))
+                        let eff = min(max(value, minZ), maxZ)
+                        if eff <= minZ {
+                            if !didHitZoomMin {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                didHitZoomMin = true
+                            }
+                        } else {
+                            didHitZoomMin = false
+                        }
+                        if eff >= maxZ {
+                            if !didHitZoomMax {
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                didHitZoomMax = true
+                            }
+                        } else {
+                            didHitZoomMax = false
+                        }
                     },
                 DragGesture()
                     .updating($dragOffset) { currentState, gestureState, _ in
-                        gestureState = currentState.translation
+                        // 限制拖拽范围：屏幕尺寸乘以各向比例
+                        let screen = UIScreen.main.bounds.size
+                        let limitX = CGFloat(screen.width * panLimitFractionX)
+                        let limitY = CGFloat(screen.height * panLimitFractionY)
+                        let t = currentState.translation
+                        let clamped = CGSize(
+                            width: min(max(t.width, -limitX), limitX),
+                            height: min(max(t.height, -limitY), limitY)
+                        )
+                        gestureState = clamped
+                    }
+                    .onChanged { value in
+                        // 触达边界时触发一次触觉反馈
+                        let screen = UIScreen.main.bounds.size
+                        let limitX = CGFloat(screen.width * panLimitFractionX)
+                        let limitY = CGFloat(screen.height * panLimitFractionY)
+                        let tx = abs(value.translation.width)
+                        let ty = abs(value.translation.height)
+                        if !didHitEdgeX && tx >= limitX {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            didHitEdgeX = true
+                        } else if didHitEdgeX && tx < limitX * 0.9 {
+                            // 回到安全区后允许再次触发
+                            didHitEdgeX = false
+                        }
+                        if !didHitEdgeY && ty >= limitY {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            didHitEdgeY = true
+                        } else if didHitEdgeY && ty < limitY * 0.9 {
+                            didHitEdgeY = false
+                        }
                     }
             )
         )

@@ -6,10 +6,18 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var showSharedImagesManager = false
     @Environment(\.colorScheme) var colorScheme
-    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 3.0
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 1.0
     // 体感跟随（视差）设置
     @AppStorage("parallaxEnabled") private var parallaxEnabled: Bool = true
-    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.6 // 0.0~1.0
+    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.85 // 0.0~1.0（默认推荐 85%）
+    // 交互范围设置（拖拽与缩放）
+    @AppStorage("panLimitFractionX") private var panLimitFractionX: Double = 0.20 // 水平比例 0.05~0.5（默认推荐 20%）
+    @AppStorage("panLimitFractionY") private var panLimitFractionY: Double = 0.20 // 垂直比例 0.05~0.5（默认推荐 20%）
+    @AppStorage("zoomMin") private var zoomMin: Double = 0.9
+    @AppStorage("zoomMax") private var zoomMax: Double = 2.0
+    // 动画与回弹参数设置
+    @AppStorage("reboundSpeed") private var reboundSpeed: Double = 0.40   // 秒（默认推荐 0.40）
+    @AppStorage("reboundDamping") private var reboundDamping: Double = 0.85 // 0~1（默认推荐 0.85）
 
     var body: some View {
         // 注意：外部（如 ContentView 的 sheet）会包裹 NavigationView，这里不再嵌套，避免导航栏高度异常。
@@ -26,6 +34,12 @@ struct SettingsView: View {
 
             // 体感跟随设置
             parallaxSettingsSection
+
+            // 交互范围设置
+            interactionRangeSection
+
+            // 动画与回弹
+            animationTuningSection
             
             // 文件夹列表
             if folderManager.folders.isEmpty {
@@ -70,7 +84,7 @@ struct SettingsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("播放间隔")
                             .font(.body)
-                        Text("设置幻灯片自动切换的时间间隔")
+                        Text("设置幻灯片自动切换的时间间隔（推荐 1.0 秒）")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -119,7 +133,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("随设备倾斜轻微视差")
                                 .font(.body)
-                            Text("不触发摇一摇，仅用于展示时的体感。尊重‘降低动态效果’设置。")
+                            Text("不触发摇一摇，仅用于展示时的体感。尊重‘降低动态效果’设置。（推荐强度 85%）")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -144,6 +158,176 @@ struct SettingsView: View {
                         .frame(width: 46, alignment: .trailing)
                 }
                 .opacity(parallaxEnabled ? 1 : 0.4)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    private var interactionRangeSection: some View {
+        Section("交互范围") {
+            VStack(spacing: 16) {
+                // 水平拖拽幅度
+                HStack {
+                    Image(systemName: "arrow.left.and.right")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.purple)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("水平拖拽幅度")
+                        Text("限制水平方向可拖动的最大距离，占屏幕宽度比例（推荐 20%）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.0f%%", panLimitFractionX * 100))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.purple)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.purple.opacity(0.12)))
+                }
+                HStack {
+                    Text("5%").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $panLimitFractionX, in: 0.05...0.5, step: 0.01) { Text("水平拖拽幅度") }
+                        .tint(.purple)
+                    Text("50%").font(.caption).foregroundColor(.secondary)
+                }
+
+                // 垂直拖拽幅度
+                HStack {
+                    Image(systemName: "arrow.up.and.down")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.indigo)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("垂直拖拽幅度")
+                        Text("限制垂直方向可拖动的最大距离，占屏幕高度比例（推荐 20%）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.0f%%", panLimitFractionY * 100))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.indigo)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.indigo.opacity(0.12)))
+                }
+                HStack {
+                    Text("5%").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $panLimitFractionY, in: 0.05...0.5, step: 0.01) { Text("垂直拖拽幅度") }
+                        .tint(.indigo)
+                    Text("50%").font(.caption).foregroundColor(.secondary)
+                }
+
+                Divider()
+
+                // 缩放范围
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.teal)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("缩放范围")
+                        Text("双指缩放时的最小/最大倍率（手指松开将回弹至原始大小，推荐最小 ×0.9、最大 ×2.0）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                }
+
+                HStack(spacing: 12) {
+                    Text("最小")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 30, alignment: .leading)
+                    Slider(value: $zoomMin, in: 0.5...1.0, step: 0.05) { Text("最小缩放") }
+                        .tint(.teal)
+                    Text(String(format: "×%.2f", zoomMin))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 50, alignment: .trailing)
+                }
+                HStack(spacing: 12) {
+                    Text("最大")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 30, alignment: .leading)
+                    Slider(value: $zoomMax, in: 1.0...3.0, step: 0.1) { Text("最大缩放") }
+                        .tint(.teal)
+                    Text(String(format: "×%.1f", zoomMax))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 50, alignment: .trailing)
+                }
+            }
+            .padding(.vertical, 6)
+            .onChange(of: zoomMin) { _, newMin in
+                if newMin >= zoomMax { zoomMax = min(3.0, newMin + 0.1) }
+            }
+            .onChange(of: zoomMax) { _, newMax in
+                if newMax <= zoomMin { zoomMin = max(0.5, newMax - 0.1) }
+            }
+        }
+    }
+
+    private var animationTuningSection: some View {
+        Section("动画与回弹") {
+            VStack(spacing: 14) {
+                // 回弹速度
+                HStack {
+                    Image(systemName: "speedometer")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.orange)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("回弹速度")
+                        Text("越小越快（响应时间，单位秒，推荐 0.40s）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.2fs", reboundSpeed))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.orange)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.orange.opacity(0.12)))
+                }
+                HStack {
+                    Text("快").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $reboundSpeed, in: 0.1...0.6, step: 0.01) { Text("回弹速度") }
+                        .tint(.orange)
+                    Text("慢").font(.caption).foregroundColor(.secondary)
+                }
+
+                // 回弹幅度
+                HStack {
+                    Image(systemName: "arrow.up.backward.and.arrow.down.forward")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.pink)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("回弹幅度")
+                        Text("越大越干净（阻尼，1为无过冲，推荐 0.85）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.2f", reboundDamping))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.pink)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.pink.opacity(0.12)))
+                }
+                HStack {
+                    Text("小").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $reboundDamping, in: 0.5...1.0, step: 0.01) { Text("回弹幅度") }
+                        .tint(.pink)
+                    Text("大").font(.caption).foregroundColor(.secondary)
+                }
             }
             .padding(.vertical, 6)
         }
