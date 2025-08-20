@@ -18,6 +18,9 @@ struct ContentView: View {
     // 保留最近结果用于背景，即便 currentImage 暂时被置空
     @State private var backgroundImage: UIImage?
     @State private var showSettings = false
+    @State private var isSlideshow = false
+    @State private var slideshowTimer: Timer?
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 3.0
     
     var body: some View {
         let mainContent = NavigationView {
@@ -38,24 +41,29 @@ struct ContentView: View {
                 }
                 .padding()
                 
-                // 左上角图片数量标签
+                // 左上角图片数量按钮 - 点击开始/停止幻灯片
                 if folderManager.hasPermission && !imageLoader.images.isEmpty {
                     VStack {
                         HStack {
-                            HStack(spacing: 6) {
-                                Image(systemName: "photo.stack.fill")
-                                    .font(.system(size: 12, weight: .semibold))
-                                Text("\(imageLoader.images.count)")
-                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                            Button(action: toggleSlideshow) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: isSlideshow ? "play.slash.fill" : "photo.stack.fill")
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("\(imageLoader.images.count)")
+                                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                                }
+                                .foregroundColor(isSlideshow ? .orange : .primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(.regularMaterial)
+                                )
+                                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                                .scaleEffect(isSlideshow ? 1.05 : 1.0)
+                                .animation(.easeInOut(duration: 0.2), value: isSlideshow)
                             }
-                            .foregroundColor(.primary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(.regularMaterial)
-                            )
-                            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            .disabled(drawManager.isDrawing || drawManager.isRestoring)
                             
                             Spacer()
                         }
@@ -148,10 +156,15 @@ struct ContentView: View {
                 
                 shakeDetector.setShakeCallback {
                     if folderManager.hasPermission && !imageLoader.images.isEmpty {
-                        // 触发即时触感反馈，提示已检测到摇动
-                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        // 触发强烈的触感反馈，提示已检测到摇动
+                        let generator = UIImpactFeedbackGenerator(style: .heavy)
                         generator.prepare()
                         generator.impactOccurred()
+                        
+                        // 添加额外的强烈震动
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                        }
 
                         withAnimation(.easeInOut(duration: 0.3)) {
                             isShaking = true
@@ -182,15 +195,29 @@ struct ContentView: View {
                 }
             }
             .onChange(of: folderManager.hasPermission) { _, hasPermission in
-                // 任何权限状态切换，都先回到“摇一摇”初始态（不展示上次图片）
+                // 任何权限状态切换，都先回到"摇一摇"初始态（不展示上次图片）
                 withAnimation(.easeOut(duration: 0.2)) { backgroundImage = nil }
                 drawManager.resetDraw()
+                stopSlideshow() // 停止幻灯片
                 
                 if hasPermission {
                     // 重新获得权限时，仅重新加载图片池，不触发自动还原
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         loadImagesIfNeeded(suppressAutoRestore: true)
                     }
+                }
+            }
+            .onDisappear {
+                stopSlideshow() // 视图消失时停止幻灯片
+            }
+            .onChange(of: slideshowInterval) { _, newInterval in
+                // 如果幻灯片正在运行，重启以应用新的间隔时间
+                if isSlideshow {
+                    stopSlideshow()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        startSlideshow()
+                    }
+                    print("🔄 幻灯片间隔更新为: \(newInterval)秒")
                 }
             }
         }
@@ -213,6 +240,48 @@ struct ContentView: View {
             drawManager.startRestoreIfNeeded()
         }
         imageLoader.loadImages(from: folderInfo)
+    }
+    
+    private func toggleSlideshow() {
+        guard folderManager.hasPermission && !imageLoader.images.isEmpty else { return }
+        
+        if isSlideshow {
+            stopSlideshow()
+        } else {
+            startSlideshow()
+        }
+        
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+    
+    private func startSlideshow() {
+        isSlideshow = true
+        
+        // 立即开始第一次抽签
+        drawManager.performRandomDraw()
+        
+        // 设置定时器，使用用户配置的间隔时间
+        slideshowTimer = Timer.scheduledTimer(withTimeInterval: slideshowInterval, repeats: true) { _ in
+            guard isSlideshow && folderManager.hasPermission && !imageLoader.images.isEmpty else {
+                stopSlideshow()
+                return
+            }
+            
+            // 只有在不是正在抽签状态时才继续下一轮
+            if !drawManager.isDrawing && !drawManager.isRestoring {
+                drawManager.performRandomDraw()
+            }
+        }
+        
+        print("🎬 幻灯片模式已开始，间隔: \(slideshowInterval)秒")
+    }
+    
+    private func stopSlideshow() {
+        isSlideshow = false
+        slideshowTimer?.invalidate()
+        slideshowTimer = nil
+        
+        print("🛑 幻灯片模式已停止")
     }
     
     private var setupView: some View {
@@ -474,7 +543,7 @@ struct ResultImageView: View {
         
         if isPortrait {
             // 竖屏图片：允许更高的显示高度，占用更多屏幕空间
-            let maxHeight = screenSize.height * 0.75 // 从65%提升到75%
+            let maxHeight = screenSize.height * 0.70 // 从75%调整到70%
             let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
@@ -487,7 +556,7 @@ struct ResultImageView: View {
             }
         } else {
             // 横屏图片：增大显示尺寸
-            let maxHeight = screenSize.height * 0.45 // 从固定300改为屏幕高度的45%
+            let maxHeight = screenSize.height * 0.40 // 从45%调整到40%
             let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
@@ -535,6 +604,59 @@ struct ResultImageView: View {
     }
 }
 
+// 支持缩放和拖拽的图片卡片
+struct ZoomableImageCard: View {
+    let image: UIImage
+    let scale: CGFloat
+    let offset: CGSize
+    let magnifyBy: CGFloat
+    let dragOffset: CGSize
+
+    private var imageDisplaySize: CGSize {
+        let screenSize = UIScreen.main.bounds.size
+        let imageSize = image.size
+        let aspectRatio = imageSize.width / imageSize.height
+        let isPortrait = aspectRatio < 1.0
+        if isPortrait {
+            let maxHeight = screenSize.height * 0.70
+            let maxWidth = screenSize.width * 0.92
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        } else {
+            let maxHeight = screenSize.height * 0.40
+            let maxWidth = screenSize.width * 0.92
+            let heightBasedWidth = maxHeight * aspectRatio
+            let widthBasedHeight = maxWidth / aspectRatio
+            if heightBasedWidth <= maxWidth {
+                return CGSize(width: heightBasedWidth, height: maxHeight)
+            } else {
+                return CGSize(width: maxWidth, height: widthBasedHeight)
+            }
+        }
+    }
+
+    var body: some View {
+        Image(uiImage: image)
+            .resizable()
+            .aspectRatio(contentMode: .fit)
+            .frame(width: imageDisplaySize.width, height: imageDisplaySize.height)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .compositingGroup()
+            .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
+            .scaleEffect(scale * magnifyBy)
+            .offset(x: offset.width + dragOffset.width, y: offset.height + dragOffset.height)
+    }
+}
+
 // 静态图片卡片（统一样式，无入场弹跳），用于交叉淡入容器
 struct ResultImageCard: View {
     let image: UIImage
@@ -545,7 +667,7 @@ struct ResultImageCard: View {
         let aspectRatio = imageSize.width / imageSize.height
         let isPortrait = aspectRatio < 1.0
         if isPortrait {
-            let maxHeight = screenSize.height * 0.75
+            let maxHeight = screenSize.height * 0.70
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -555,7 +677,7 @@ struct ResultImageCard: View {
                 return CGSize(width: maxWidth, height: widthBasedHeight)
             }
         } else {
-            let maxHeight = screenSize.height * 0.45
+            let maxHeight = screenSize.height * 0.40
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -588,21 +710,43 @@ struct CrossfadeResultView: View {
     @State private var backImage: UIImage?
     @State private var frontImage: UIImage?
     @State private var showFront = true
+    @State private var scale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @GestureState private var magnifyBy = 1.0
+    @GestureState private var dragOffset = CGSize.zero
 
     var body: some View {
         ZStack {
             if let back = backImage {
-                ResultImageCard(image: back)
+                ZoomableImageCard(image: back, scale: scale, offset: offset, magnifyBy: magnifyBy, dragOffset: dragOffset)
                     .opacity(showFront ? 0 : 1)
                     .animation(.easeInOut(duration: 0.28), value: showFront)
+                    // 当手势结束、GestureState 复位时，使用弹簧回弹动画
+                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: magnifyBy)
+                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: dragOffset)
             }
             if let front = frontImage {
-                ResultImageCard(image: front)
+                ZoomableImageCard(image: front, scale: scale, offset: offset, magnifyBy: magnifyBy, dragOffset: dragOffset)
                     .opacity(showFront ? 1 : 0)
                     .scaleEffect(showFront ? 1.0 : 0.985)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFront)
+                    // 当手势结束、GestureState 复位时，使用弹簧回弹动画
+                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: magnifyBy)
+                    .animation(.interpolatingSpring(mass: 1.2, stiffness: 60, damping: 8), value: dragOffset)
             }
         }
+        .gesture(
+            SimultaneousGesture(
+                MagnificationGesture()
+                    .updating($magnifyBy) { currentState, gestureState, _ in
+                        gestureState = currentState
+                    },
+                DragGesture()
+                    .updating($dragOffset) { currentState, gestureState, _ in
+                        gestureState = currentState.translation
+                    }
+            )
+        )
         .onAppear {
             // 初次显示
             frontImage = image
@@ -611,6 +755,7 @@ struct CrossfadeResultView: View {
         }
         .onChange(of: image) { _, new in
             // 切换到新图：先把当前front放到背后，再把新图放在前面，触发淡入
+            // 保持当前的缩放和位置状态
             backImage = frontImage
             frontImage = new
             showFront = false

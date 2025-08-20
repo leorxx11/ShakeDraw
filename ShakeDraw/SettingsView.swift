@@ -6,6 +6,7 @@ struct SettingsView: View {
     @State private var showImporter = false
     @State private var showSharedImagesManager = false
     @Environment(\.colorScheme) var colorScheme
+    @AppStorage("slideshowInterval") private var slideshowInterval: Double = 3.0
 
     var body: some View {
         // 注意：外部（如 ContentView 的 sheet）会包裹 NavigationView，这里不再嵌套，避免导航栏高度异常。
@@ -16,6 +17,9 @@ struct SettingsView: View {
                     statisticsRow
                 }
             }
+            
+            // 幻灯片设置区域
+            slideshowSettingsSection
             
             // 文件夹列表
             if folderManager.folders.isEmpty {
@@ -47,6 +51,55 @@ struct SettingsView: View {
     }
     
     // MARK: - 组件视图
+    
+    private var slideshowSettingsSection: some View {
+        Section("幻灯片设置") {
+            VStack(spacing: 16) {
+                HStack {
+                    Image(systemName: "timer")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.blue)
+                        .frame(width: 20)
+                    
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("播放间隔")
+                            .font(.body)
+                        Text("设置幻灯片自动切换的时间间隔")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    
+                    Spacer()
+                    
+                    Text(String(format: "%.1f 秒", slideshowInterval))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule()
+                                .fill(.blue.opacity(0.1))
+                        )
+                }
+                
+                HStack {
+                    Text("0.5")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    
+                    Slider(value: $slideshowInterval, in: 0.5...5.0, step: 0.1) {
+                        Text("播放间隔")
+                    }
+                    .accentColor(.blue)
+                    
+                    Text("5.0")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+    }
     
     private var statisticsRow: some View {
         HStack(spacing: 0) {
