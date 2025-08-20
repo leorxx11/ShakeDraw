@@ -7,6 +7,9 @@ struct SettingsView: View {
     @State private var showSharedImagesManager = false
     @Environment(\.colorScheme) var colorScheme
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 3.0
+    // 体感跟随（视差）设置
+    @AppStorage("parallaxEnabled") private var parallaxEnabled: Bool = true
+    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.6 // 0.0~1.0
 
     var body: some View {
         // 注意：外部（如 ContentView 的 sheet）会包裹 NavigationView，这里不再嵌套，避免导航栏高度异常。
@@ -20,6 +23,9 @@ struct SettingsView: View {
             
             // 幻灯片设置区域
             slideshowSettingsSection
+
+            // 体感跟随设置
+            parallaxSettingsSection
             
             // 文件夹列表
             if folderManager.folders.isEmpty {
@@ -98,6 +104,48 @@ struct SettingsView: View {
                 }
             }
             .padding(.vertical, 8)
+        }
+    }
+
+    private var parallaxSettingsSection: some View {
+        Section("体感跟随") {
+            VStack(spacing: 14) {
+                Toggle(isOn: $parallaxEnabled) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "view.3d")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.green)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("随设备倾斜轻微视差")
+                                .font(.body)
+                            Text("不触发摇一摇，仅用于展示时的体感。尊重‘降低动态效果’设置。")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                HStack {
+                    Text("强度")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 32, alignment: .leading)
+
+                    Slider(value: $parallaxStrength, in: 0...1, step: 0.05) {
+                        Text("体感强度")
+                    }
+                    .disabled(!parallaxEnabled)
+                    .tint(.green)
+
+                    Text(String(format: "%.0f%%", parallaxStrength * 100))
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(width: 46, alignment: .trailing)
+                }
+                .opacity(parallaxEnabled ? 1 : 0.4)
+            }
+            .padding(.vertical, 6)
         }
     }
     

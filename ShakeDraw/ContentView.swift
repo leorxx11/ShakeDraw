@@ -715,10 +715,39 @@ struct CrossfadeResultView: View {
     @GestureState private var magnifyBy = 1.0
     @GestureState private var dragOffset = CGSize.zero
 
+    // 体感跟随（视差）
+    @StateObject private var parallax = MotionParallaxManager()
+    @AppStorage("parallaxEnabled") private var parallaxEnabled: Bool = true
+    @AppStorage("parallaxStrength") private var parallaxStrength: Double = 0.6 // 0.0~1.0
+
+    private var isInteracting: Bool {
+        (abs(magnifyBy - 1.0) > 0.001) || (abs(dragOffset.width) > 0.5) || (abs(dragOffset.height) > 0.5)
+    }
+
+    private var tiltOffset: CGSize {
+        guard parallaxEnabled, !UIAccessibility.isReduceMotionEnabled, !isInteracting else { return .zero }
+        let hMax = 12.0 * parallaxStrength
+        let vMax = 8.0 * parallaxStrength
+        return CGSize(width: CGFloat(parallax.normX * hMax), height: CGFloat(parallax.normY * vMax))
+    }
+
+    private var tiltAngles: (x: Double, y: Double) {
+        guard parallaxEnabled, !UIAccessibility.isReduceMotionEnabled, !isInteracting else { return (0, 0) }
+        let maxAngle = 6.0 * parallaxStrength
+        let rollNorm = max(-1.0, min(1.0, parallax.rollDeg / 45.0))
+        let pitchNorm = max(-1.0, min(1.0, parallax.pitchDeg / 45.0))
+        let xDeg = -pitchNorm * maxAngle
+        let yDeg = -rollNorm * maxAngle
+        return (xDeg, yDeg)
+    }
+
     var body: some View {
         ZStack {
             if let back = backImage {
                 ZoomableImageCard(image: back, scale: scale, offset: offset, magnifyBy: magnifyBy, dragOffset: dragOffset)
+                    .offset(tiltOffset)
+                    .rotation3DEffect(.degrees(tiltAngles.x), axis: (x: 1, y: 0, z: 0))
+                    .rotation3DEffect(.degrees(tiltAngles.y), axis: (x: 0, y: 1, z: 0))
                     .opacity(showFront ? 0 : 1)
                     .animation(.easeInOut(duration: 0.28), value: showFront)
                     // 当手势结束、GestureState 复位时，使用弹簧回弹动画
@@ -727,6 +756,9 @@ struct CrossfadeResultView: View {
             }
             if let front = frontImage {
                 ZoomableImageCard(image: front, scale: scale, offset: offset, magnifyBy: magnifyBy, dragOffset: dragOffset)
+                    .offset(tiltOffset)
+                    .rotation3DEffect(.degrees(tiltAngles.x), axis: (x: 1, y: 0, z: 0))
+                    .rotation3DEffect(.degrees(tiltAngles.y), axis: (x: 0, y: 1, z: 0))
                     .opacity(showFront ? 1 : 0)
                     .scaleEffect(showFront ? 1.0 : 0.985)
                     .animation(.spring(response: 0.35, dampingFraction: 0.85), value: showFront)
@@ -752,6 +784,7 @@ struct CrossfadeResultView: View {
             frontImage = image
             backImage = nil
             showFront = true
+            if parallaxEnabled && !UIAccessibility.isReduceMotionEnabled { parallax.start() }
         }
         .onChange(of: image) { _, new in
             // 切换到新图：先把当前front放到背后，再把新图放在前面，触发淡入
@@ -767,6 +800,16 @@ struct CrossfadeResultView: View {
                     if showFront { backImage = nil }
                 }
             }
+        }
+        .onChange(of: parallaxEnabled) { _, enabled in
+            if enabled && !UIAccessibility.isReduceMotionEnabled {
+                parallax.start()
+            } else {
+                parallax.stop()
+            }
+        }
+        .onDisappear {
+            parallax.stop()
         }
     }
 }
