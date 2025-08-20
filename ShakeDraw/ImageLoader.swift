@@ -9,8 +9,8 @@ class ImageLoader: ObservableObject {
     private let supportedImageTypes: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
     private var parentFolderURL: URL?
     
-    func loadImages(from folderURLs: [URL]) {
-        let paths = folderURLs.map { $0.path }.joined(separator: ", ")
+    func loadImages(from folderInfo: [(url: URL, isAppGroup: Bool)]) {
+        let paths = folderInfo.map { $0.url.path }.joined(separator: ", ")
         print("🖼️ 开始加载图片，文件夹集合: [\(paths)]")
         isLoading = true
         images.removeAll()
@@ -18,12 +18,17 @@ class ImageLoader: ObservableObject {
         DispatchQueue.global(qos: .userInitiated).async {
             var imageSet: Set<URL> = []
 
-            for folderURL in folderURLs {
-                let startAccess = folderURL.startAccessingSecurityScopedResource()
-                defer { if startAccess { folderURL.stopAccessingSecurityScopedResource() } }
+            for (folderURL, isAppGroup) in folderInfo {
+                let startAccess = isAppGroup ? true : folderURL.startAccessingSecurityScopedResource()
+                defer { if startAccess && !isAppGroup { folderURL.stopAccessingSecurityScopedResource() } }
 
-                print("🖼️ [\(folderURL.lastPathComponent)] 安全访问权限: \(startAccess)")
-                guard startAccess else { continue }
+                print("🖼️ [\(folderURL.lastPathComponent)] 安全访问权限: \(startAccess) (AppGroup: \(isAppGroup))")
+                print("🖼️ [\(folderURL.lastPathComponent)] URL路径: \(folderURL.path)")
+                
+                // 即使安全访问失败，也尝试读取（可能权限仍然有效）
+                if !startAccess && !isAppGroup {
+                    print("⚠️ 安全访问权限失败，仍尝试读取文件夹")
+                }
 
                 if let enumerator = FileManager.default.enumerator(at: folderURL, includingPropertiesForKeys: [.isRegularFileKey, .nameKey], options: [.skipsHiddenFiles]) {
                     for case let fileURL as URL in enumerator {
@@ -37,7 +42,24 @@ class ImageLoader: ObservableObject {
                         }
                     }
                 } else {
-                    print("❌ 无法创建文件枚举器: \(folderURL.path)")
+                    print("❌ 无法创建文件枚举器: \(folderURL.path)，尝试 NSFileCoordinator 回退")
+                    // 对于来自“文件”/第三方文件提供者的目录，使用 NSFileCoordinator 协调读取可提升成功率
+                    let coordinator = NSFileCoordinator(filePresenter: nil)
+                    var coordError: NSError?
+                    coordinator.coordinate(readingItemAt: folderURL, options: [], error: &coordError) { coordinatedURL in
+                        if let fallbackEnum = FileManager.default.enumerator(at: coordinatedURL, includingPropertiesForKeys: [.isRegularFileKey, .nameKey], options: [.skipsHiddenFiles]) {
+                            for case let fileURL as URL in fallbackEnum {
+                                do {
+                                    let resourceValues = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .nameKey])
+                                    if resourceValues.isRegularFile == true && self.isImageFile(fileURL) {
+                                        imageSet.insert(fileURL)
+                                    }
+                                } catch { /* ignore single file errors */ }
+                            }
+                        } else {
+                            print("❌ NSFileCoordinator 回退仍失败: \(coordinatedURL.path)")
+                        }
+                    }
                 }
             }
 
@@ -49,6 +71,12 @@ class ImageLoader: ObservableObject {
                 self.isLoading = false
             }
         }
+    }
+    
+    // Backward compatibility method
+    func loadImages(from folderURLs: [URL]) {
+        let folderInfo = folderURLs.map { (url: $0, isAppGroup: $0.lastPathComponent == "SharedImages" && $0.path.contains("/Shared/AppGroup/")) }
+        loadImages(from: folderInfo)
     }
     
     private func isImageFile(_ url: URL) -> Bool {
@@ -92,26 +120,34 @@ class ImageLoader: ObservableObject {
         return randomImage
     }
     
-    func loadUIImage(from url: URL, parentFolderURL: URL? = nil) -> UIImage? {
+    func loadUIImage(from url: URL, parentFolderURL: URL? = nil, isAppGroup: Bool? = nil) -> UIImage? {
         print("🖼️ loadUIImage 被调用，URL: \(url)")
         
         let folderURL = parentFolderURL ?? self.parentFolderURL
         
-        guard let parentURL = folderURL else {
-            print("❌ 没有父文件夹URL")
-            return nil
-        }
+        // Manage security access if we have a parent folder
+        var needsSecurityCleanup = false
+        var parentForCleanup: URL?
         
-        let startAccess = parentURL.startAccessingSecurityScopedResource()
-        defer {
-            if startAccess {
-                parentURL.stopAccessingSecurityScopedResource()
+        if let parentURL = folderURL {
+            // Normal case: we have a parent folder URL
+            let appGroup = isAppGroup ?? (parentURL.lastPathComponent == "SharedImages" && parentURL.path.contains("group.com.leorxx.ShakeDraw"))
+            let startAccess = appGroup ? true : parentURL.startAccessingSecurityScopedResource()
+            if startAccess && !appGroup {
+                needsSecurityCleanup = true
+                parentForCleanup = parentURL
             }
+        } else {
+            // Fallback: try to load directly (security access might be active from scanning)
+            #if DEBUG
+            print("⚠️ 没有父文件夹URL，尝试直接加载: \(url.lastPathComponent)")
+            #endif
         }
         
-        guard startAccess else {
-            print("❌ 无法获取父文件夹访问权限")
-            return nil
+        defer { 
+            if needsSecurityCleanup, let parent = parentForCleanup {
+                parent.stopAccessingSecurityScopedResource()
+            }
         }
         
         guard let imageData = try? Data(contentsOf: url),
@@ -124,13 +160,31 @@ class ImageLoader: ObservableObject {
     }
 
     /// 加载缩略图，避免在滚动动画中解码超大原图造成卡顿
-    func loadThumbnail(from url: URL, parentFolderURL: URL? = nil, maxDimension: CGFloat = 200) -> UIImage? {
+    func loadThumbnail(from url: URL, parentFolderURL: URL? = nil, maxDimension: CGFloat = 200, isAppGroup: Bool? = nil) -> UIImage? {
         let folderURL = parentFolderURL ?? self.parentFolderURL
-        guard let parentURL = folderURL else { return nil }
-
-        let startAccess = parentURL.startAccessingSecurityScopedResource()
-        defer { if startAccess { parentURL.stopAccessingSecurityScopedResource() } }
-        guard startAccess else { return nil }
+        
+        // Manage security access if we have a parent folder
+        var needsSecurityCleanup = false
+        var parentForCleanup: URL?
+        
+        if let parentURL = folderURL {
+            let appGroup = isAppGroup ?? (parentURL.lastPathComponent == "SharedImages" && parentURL.path.contains("group.com.leorxx.ShakeDraw"))
+            let startAccess = appGroup ? true : parentURL.startAccessingSecurityScopedResource()
+            if startAccess && !appGroup {
+                needsSecurityCleanup = true
+                parentForCleanup = parentURL
+            }
+        } else {
+            #if DEBUG
+            print("⚠️ loadThumbnail: 没有父文件夹URL，尝试直接加载: \(url.lastPathComponent)")
+            #endif
+        }
+        
+        defer { 
+            if needsSecurityCleanup, let parent = parentForCleanup {
+                parent.stopAccessingSecurityScopedResource()
+            }
+        }
 
         if let src = CGImageSourceCreateWithURL(url as CFURL, nil) {
             let opts: [NSString: Any] = [

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ShakeDraw is an iOS app that allows users to randomly select images from a folder by shaking their device or tapping a button. Built with SwiftUI and targeting iOS 18.0+.
+ShakeDraw is an iOS app that allows users to randomly select images from a folder by shaking their device or tapping a button. Built with SwiftUI and targeting iOS 18.0+. The app includes a Share Extension that enables users to save images directly from Safari, Photos, and other iOS apps.
 
 ## Development Commands
 
@@ -28,7 +28,11 @@ ShakeDraw/
 ├── ImageLoader.swift          # Image loading, caching, format support
 ├── RandomDrawManager.swift    # Draw logic, result persistence, state machine
 ├── ShakeDetector.swift        # CoreMotion accelerometer integration
-└── ShakeDrawApp.swift        # App entry point
+├── ShakeDrawApp.swift         # App entry point
+└── Share to ShakeDraw/        # Share Extension
+    ├── ShareViewController.swift  # Share extension main controller
+    ├── Info.plist                # Extension configuration
+    └── MainInterface.storyboard  # Extension UI
 ```
 
 ### Component Responsibilities
@@ -63,6 +67,14 @@ ShakeDraw/
 - Custom button styles with haptic feedback and visual press states
 - Responsive image display optimized for portrait vs landscape images
 
+**ShareViewController**:
+- Share Extension main controller handling external app image sharing
+- Intelligent content type detection (UTType.image, UTType.fileURL, UTType.url)
+- Async preview loading with smart timeout management (8 seconds)
+- Multi-format support: JPEG, PNG, WebP, HEIC, GIF, BMP, TIFF
+- Network image processing with HTTP Content-Type detection
+- Graceful fallback with placeholder preview when loading fails
+
 ### Key Technical Patterns
 
 **Security-Scoped Resource Management**: Always pair `startAccessingSecurityScopedResource()` with proper cleanup in defer blocks or explicit calls to `stopAccessingSecurityScopedResource()`.
@@ -74,6 +86,10 @@ ShakeDraw/
 **Memory Management**: Uses `UIGraphicsImageRenderer` for image operations, pre-decodes images to prevent render stuttering, and implements thumbnail caching for performance.
 
 **Persistence Strategy**: Stores relative paths instead of absolute URLs, with folder path validation to ensure bookmarks remain valid across app launches.
+
+**Share Extension Async Pattern**: Uses DispatchGroup for coordinating multiple async operations, with proper timeout handling and status feedback. Always call completion handlers to avoid hanging UI.
+
+**Smart Content Type Detection**: Employs HEAD requests to check HTTP Content-Type before downloading full content, optimizing network usage and processing time.
 
 ## UI Customization Points
 
@@ -89,3 +105,9 @@ ShakeDraw/
 - **State Management**: Multiple @StateObject instances coordinate through delegation pattern
 - **Performance**: Pre-decoding and thumbnail generation prevent UI stuttering during image display
 - **Persistence**: App remembers last selected folder and result across launches using UserDefaults and file system bookmarks
+- **Share Extension**: 
+  - Always test with actual devices for Safari sharing (simulator limitations)
+  - Use App Groups for shared container access between main app and extension
+  - Handle async operations properly to avoid extension termination
+  - Implement proper timeout mechanisms for network operations
+  - Provide visual feedback even when preview loading fails

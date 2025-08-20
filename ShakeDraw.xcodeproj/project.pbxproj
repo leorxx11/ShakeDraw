@@ -6,7 +6,18 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B331B6AB2E558637007B0B18 /* Share to ShakeDraw.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = B331B6A12E558637007B0B18 /* Share to ShakeDraw.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
+		B331B6A92E558637007B0B18 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3A287FD2E54378200B1F8E5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B331B6A02E558637007B0B18;
+			remoteInfo = "Share to ShakeDraw";
+		};
 		B3A288132E54378300B1F8E5 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B3A287FD2E54378200B1F8E5 /* Project object */;
@@ -23,13 +34,46 @@
 		};
 /* End PBXContainerItemProxy section */
 
+/* Begin PBXCopyFilesBuildPhase section */
+		B331B6B02E558637007B0B18 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B331B6AB2E558637007B0B18 /* Share to ShakeDraw.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
+		B331B6A12E558637007B0B18 /* Share to ShakeDraw.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = "Share to ShakeDraw.appex"; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3A288052E54378200B1F8E5 /* ShakeDraw.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ShakeDraw.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3A288122E54378300B1F8E5 /* ShakeDrawTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShakeDrawTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B3A2881C2E54378300B1F8E5 /* ShakeDrawUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ShakeDrawUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		B331B6AC2E558637007B0B18 /* Exceptions for "Share to ShakeDraw" folder in "Share to ShakeDraw" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B331B6A02E558637007B0B18 /* Share to ShakeDraw */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		B331B6A22E558637007B0B18 /* Share to ShakeDraw */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				B331B6AC2E558637007B0B18 /* Exceptions for "Share to ShakeDraw" folder in "Share to ShakeDraw" target */,
+			);
+			path = "Share to ShakeDraw";
+			sourceTree = "<group>";
+		};
 		B3A288072E54378200B1F8E5 /* ShakeDraw */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ShakeDraw;
@@ -48,6 +92,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		B331B69E2E558637007B0B18 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B3A288022E54378200B1F8E5 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -78,6 +129,7 @@
 				B3A288072E54378200B1F8E5 /* ShakeDraw */,
 				B3A288152E54378300B1F8E5 /* ShakeDrawTests */,
 				B3A2881F2E54378300B1F8E5 /* ShakeDrawUITests */,
+				B331B6A22E558637007B0B18 /* Share to ShakeDraw */,
 				B3A288062E54378200B1F8E5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +140,7 @@
 				B3A288052E54378200B1F8E5 /* ShakeDraw.app */,
 				B3A288122E54378300B1F8E5 /* ShakeDrawTests.xctest */,
 				B3A2881C2E54378300B1F8E5 /* ShakeDrawUITests.xctest */,
+				B331B6A12E558637007B0B18 /* Share to ShakeDraw.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,6 +148,28 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		B331B6A02E558637007B0B18 /* Share to ShakeDraw */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B331B6AD2E558637007B0B18 /* Build configuration list for PBXNativeTarget "Share to ShakeDraw" */;
+			buildPhases = (
+				B331B69D2E558637007B0B18 /* Sources */,
+				B331B69E2E558637007B0B18 /* Frameworks */,
+				B331B69F2E558637007B0B18 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B331B6A22E558637007B0B18 /* Share to ShakeDraw */,
+			);
+			name = "Share to ShakeDraw";
+			packageProductDependencies = (
+			);
+			productName = "Share to ShakeDraw";
+			productReference = B331B6A12E558637007B0B18 /* Share to ShakeDraw.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		B3A288042E54378200B1F8E5 /* ShakeDraw */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B3A288262E54378300B1F8E5 /* Build configuration list for PBXNativeTarget "ShakeDraw" */;
@@ -102,10 +177,12 @@
 				B3A288012E54378200B1F8E5 /* Sources */,
 				B3A288022E54378200B1F8E5 /* Frameworks */,
 				B3A288032E54378200B1F8E5 /* Resources */,
+				B331B6B02E558637007B0B18 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				B331B6AA2E558637007B0B18 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				B3A288072E54378200B1F8E5 /* ShakeDraw */,
@@ -173,6 +250,9 @@
 				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+					B331B6A02E558637007B0B18 = {
+						CreatedOnToolsVersion = 16.4;
+					};
 					B3A288042E54378200B1F8E5 = {
 						CreatedOnToolsVersion = 16.4;
 					};
@@ -203,11 +283,19 @@
 				B3A288042E54378200B1F8E5 /* ShakeDraw */,
 				B3A288112E54378300B1F8E5 /* ShakeDrawTests */,
 				B3A2881B2E54378300B1F8E5 /* ShakeDrawUITests */,
+				B331B6A02E558637007B0B18 /* Share to ShakeDraw */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		B331B69F2E558637007B0B18 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B3A288032E54378200B1F8E5 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -232,6 +320,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B331B69D2E558637007B0B18 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B3A288012E54378200B1F8E5 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -256,6 +351,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		B331B6AA2E558637007B0B18 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B331B6A02E558637007B0B18 /* Share to ShakeDraw */;
+			targetProxy = B331B6A92E558637007B0B18 /* PBXContainerItemProxy */;
+		};
 		B3A288142E54378300B1F8E5 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = B3A288042E54378200B1F8E5 /* ShakeDraw */;
@@ -269,6 +369,60 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		B331B6AE2E558637007B0B18 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Share to ShakeDraw/Share to ShakeDraw.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y89J64B8M9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Share to ShakeDraw/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Share to ShakeDraw";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.leorxx.ShakeDraw.Share-to-ShakeDraw";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		B331B6AF2E558637007B0B18 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Share to ShakeDraw/Share to ShakeDraw.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y89J64B8M9;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Share to ShakeDraw/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Share to ShakeDraw";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.leorxx.ShakeDraw.Share-to-ShakeDraw";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 		B3A288242E54378300B1F8E5 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -395,6 +549,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ShakeDraw/ShakeDraw.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y89J64B8M9;
@@ -402,6 +557,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "需要访问文档文件夹来选择图片文件夹进行抽签";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问相册权限以便将共享的图片保存到您的相册中";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问相册来选择图片进行抽签";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -428,6 +584,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = ShakeDraw/ShakeDraw.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Y89J64B8M9;
@@ -435,6 +592,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace = YES;
 				INFOPLIST_KEY_NSDocumentsFolderUsageDescription = "需要访问文档文件夹来选择图片文件夹进行抽签";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "需要访问相册权限以便将共享的图片保存到您的相册中";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "需要访问相册来选择图片进行抽签";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -531,6 +689,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		B331B6AD2E558637007B0B18 /* Build configuration list for PBXNativeTarget "Share to ShakeDraw" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B331B6AE2E558637007B0B18 /* Debug */,
+				B331B6AF2E558637007B0B18 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		B3A288002E54378200B1F8E5 /* Build configuration list for PBXProject "ShakeDraw" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -13,6 +13,9 @@ class RandomDrawManager: ObservableObject {
     
     // 当前显示的图片URL，用于防重复
     private var currentImageURL: URL?
+    // 会话级还原/预览展示门阀，避免同一会话内重复自动还原
+    private var didRestoreThisSession = false
+    private var didShowCachedPreviewThisSession = false
     
     // 最短加载时长（更快的节奏）
     let preSpinDuration: TimeInterval = 0.35
@@ -30,6 +33,18 @@ class RandomDrawManager: ObservableObject {
     func setDependencies(imageLoader: ImageLoader, folderManager: FolderManager) {
         self.imageLoader = imageLoader
         self.folderManager = folderManager
+    }
+    
+    func clearCurrentDisplay() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            currentImage = nil
+            showResult = false
+            isDrawing = false
+            isRestoring = false
+        }
+        currentImageURL = nil
+        pendingTargetURL = nil
+        pendingTargetImage = nil
     }
     
     func performRandomDraw() {
@@ -68,7 +83,8 @@ class RandomDrawManager: ObservableObject {
             // 后台预加载目标全图
             DispatchQueue.global(qos: .userInitiated).async {
                 let parentFolderURL = folderManager.parentFolder(for: targetURL)
-                let loaded = imageLoader.loadUIImage(from: targetURL, parentFolderURL: parentFolderURL)
+                let isAppGroup = parentFolderURL.map { self.folderManager?.isAppGroupURL($0) ?? false } ?? false
+                let loaded = imageLoader.loadUIImage(from: targetURL, parentFolderURL: parentFolderURL, isAppGroup: isAppGroup)
                 let targetImage = loaded.flatMap { imageLoader.predecode($0) }
                 DispatchQueue.main.async {
                     self.pendingTargetImage = targetImage
@@ -115,11 +131,16 @@ class RandomDrawManager: ObservableObject {
     }
 
     func showCachedPreviewIfAny() {
-        guard hasStoredResult(), let url = previewFileURL(), FileManager.default.fileExists(atPath: url.path) else { return }
+        // 仅在本会话首次且确有缓存时展示
+        guard didShowCachedPreviewThisSession == false,
+              hasStoredResult(),
+              let url = previewFileURL(),
+              FileManager.default.fileExists(atPath: url.path) else { return }
         if let data = try? Data(contentsOf: url), let img = UIImage(data: data) {
             let decoded = imageLoader?.predecode(img) ?? img
             self.currentImage = decoded
             self.showResult = true
+            self.didShowCachedPreviewThisSession = true
             print("✅ 已显示缓存预览图")
         }
     }
@@ -141,7 +162,8 @@ class RandomDrawManager: ObservableObject {
                 let parent = self.folderManager?.parentFolder(for: url)
                 // A: 先尝试生成缩略图，尽快揭示
                 DispatchQueue.global(qos: .userInitiated).async {
-                    let thumb = loader.loadThumbnail(from: url, parentFolderURL: parent, maxDimension: 600)
+                    let isAppGroup = parent.map { self.folderManager?.isAppGroupURL($0) ?? false } ?? false
+                    let thumb = loader.loadThumbnail(from: url, parentFolderURL: parent, maxDimension: 600, isAppGroup: isAppGroup)
                     DispatchQueue.main.async {
                         if self.currentImage == nil && self.showResult == false, let t = thumb {
                             self.currentImage = t
@@ -153,7 +175,8 @@ class RandomDrawManager: ObservableObject {
                 }
                 // B: 加载原图，准备好后替换缩略图
                 DispatchQueue.global(qos: .userInitiated).async {
-                    let loaded = loader.loadUIImage(from: url, parentFolderURL: parent)
+                    let isAppGroup = parent.map { self.folderManager?.isAppGroupURL($0) ?? false } ?? false
+                    let loaded = loader.loadUIImage(from: url, parentFolderURL: parent, isAppGroup: isAppGroup)
                     let decoded = loaded.flatMap { loader.predecode($0) }
                     DispatchQueue.main.async {
                         if let img = decoded {
@@ -172,7 +195,8 @@ class RandomDrawManager: ObservableObject {
                     let url = self.imageLoader?.getRandomImage(excluding: self.currentImageURL)
                     let loaded = url.flatMap { u in
                         let parent = self.folderManager?.parentFolder(for: u)
-                        return self.imageLoader?.loadUIImage(from: u, parentFolderURL: parent)
+                        let isAppGroup = parent.map { self.folderManager?.isAppGroupURL($0) ?? false } ?? false
+                        return self.imageLoader?.loadUIImage(from: u, parentFolderURL: parent, isAppGroup: isAppGroup)
                     }
                     let decoded = loaded.flatMap { self.imageLoader?.predecode($0) }
                     DispatchQueue.main.async {
@@ -234,7 +258,8 @@ class RandomDrawManager: ObservableObject {
 
         DispatchQueue.global(qos: .userInitiated).async {
             let parent = self.folderManager?.parentFolder(for: url)
-            guard let img = self.imageLoader?.loadUIImage(from: url, parentFolderURL: parent),
+            let isAppGroup = parent.map { self.folderManager?.isAppGroupURL($0) ?? false } ?? false
+            guard let img = self.imageLoader?.loadUIImage(from: url, parentFolderURL: parent, isAppGroup: isAppGroup),
                   let decoded = self.imageLoader?.predecode(img) else {
                 print("❌ 恢复上次结果失败: \(url.lastPathComponent)")
                 DispatchQueue.main.async { self.isRestoring = false }
@@ -262,7 +287,9 @@ class RandomDrawManager: ObservableObject {
 
     func startRestoreIfNeeded() {
         guard folderManager?.hasPermission == true else { return }
-        if hasStoredResult() {
+        // 同一会话只自动还原一次
+        if hasStoredResult(), didRestoreThisSession == false {
+            didRestoreThisSession = true
             isRestoring = true
             restoreLastResultIfAvailable()
         }

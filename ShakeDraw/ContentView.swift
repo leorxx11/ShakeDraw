@@ -9,6 +9,7 @@ import SwiftUI
 import UIKit
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var folderManager = FolderManager()
     @StateObject private var imageLoader = ImageLoader()
     @StateObject private var shakeDetector = ShakeDetector()
@@ -19,7 +20,7 @@ struct ContentView: View {
     @State private var showSettings = false
     
     var body: some View {
-        NavigationView {
+        let mainContent = NavigationView {
             ZStack {
                 // 高斯模糊背景：使用最近结果图片作为背景
                 if let bg = backgroundImage {
@@ -87,8 +88,8 @@ struct ContentView: View {
                     Spacer()
                 }
                 .sheet(isPresented: $showSettings, onDismiss: {
-                    // 返回时刷新图片列表
-                    loadImagesIfNeeded()
+                    // 返回时刷新图片列表，但不自动还原上次图片（避免误触发缓存显示）
+                    loadImagesIfNeeded(suppressAutoRestore: true)
                 }) {
                     NavigationView {
                         SettingsView(folderManager: folderManager)
@@ -137,13 +138,21 @@ struct ContentView: View {
             .navigationBarHidden(true)
             .onAppear {
                 drawManager.setDependencies(imageLoader: imageLoader, folderManager: folderManager)
-                // 在任何权限判断之前，优先展示缓存预览（若存在）
-                drawManager.showCachedPreviewIfAny()
-                // 初始化背景图
-                backgroundImage = drawManager.currentImage
+                
+                // 只有在有权限的情况下才显示缓存
+                if folderManager.hasPermission {
+                    drawManager.showCachedPreviewIfAny()
+                    // 初始化背景图
+                    backgroundImage = drawManager.currentImage
+                }
                 
                 shakeDetector.setShakeCallback {
                     if folderManager.hasPermission && !imageLoader.images.isEmpty {
+                        // 触发即时触感反馈，提示已检测到摇动
+                        let generator = UIImpactFeedbackGenerator(style: .medium)
+                        generator.prepare()
+                        generator.impactOccurred()
+
                         withAnimation(.easeInOut(duration: 0.3)) {
                             isShaking = true
                         }
@@ -158,7 +167,14 @@ struct ContentView: View {
             }
             .onChange(of: folderManager.folders) { _, _ in
                 // 文件夹列表变化时重新加载图片
-                loadImagesIfNeeded()
+                loadImagesIfNeeded(suppressAutoRestore: true)
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    print("🐞 场景切回前台：刷新共享目录计数与图片池")
+                    folderManager.refreshFolderCounts()
+                    loadImagesIfNeeded(suppressAutoRestore: true)
+                }
             }
             .onChange(of: drawManager.currentImage) { _, newImage in
                 if let img = newImage {
@@ -166,26 +182,37 @@ struct ContentView: View {
                 }
             }
             .onChange(of: folderManager.hasPermission) { _, hasPermission in
-                // 失去权限（回到欢迎界面）时，清空背景以避免残留
-                if hasPermission == false {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        backgroundImage = nil
+                // 任何权限状态切换，都先回到“摇一摇”初始态（不展示上次图片）
+                withAnimation(.easeOut(duration: 0.2)) { backgroundImage = nil }
+                drawManager.resetDraw()
+                
+                if hasPermission {
+                    // 重新获得权限时，仅重新加载图片池，不触发自动还原
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        loadImagesIfNeeded(suppressAutoRestore: true)
                     }
                 }
             }
         }
+        return mainContent
     }
     
-    private func loadImagesIfNeeded() {
+    private func getCachedImagePath() -> String? {
+        return UserDefaults.standard.string(forKey: "ShakeDraw_LastResultRelativePath")
+    }
+    
+    private func loadImagesIfNeeded(suppressAutoRestore: Bool = false) {
         guard folderManager.hasPermission else {
             return
         }
         
-        let urls = folderManager.includedFolderURLs()
-        guard !urls.isEmpty else { return }
+        let folderInfo = folderManager.includedFolderInfo()
+        guard !folderInfo.isEmpty else { return }
         // 统一通过 Manager 的恢复接口处理，避免重复逻辑
-        drawManager.startRestoreIfNeeded()
-        imageLoader.loadImages(from: urls)
+        if !suppressAutoRestore {
+            drawManager.startRestoreIfNeeded()
+        }
+        imageLoader.loadImages(from: folderInfo)
     }
     
     private var setupView: some View {
@@ -447,8 +474,8 @@ struct ResultImageView: View {
         
         if isPortrait {
             // 竖屏图片：允许更高的显示高度，占用更多屏幕空间
-            let maxHeight = screenSize.height * 0.65 // 从300提升到屏幕高度的65%
-            let maxWidth = screenSize.width * 0.85
+            let maxHeight = screenSize.height * 0.75 // 从65%提升到75%
+            let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -459,9 +486,9 @@ struct ResultImageView: View {
                 return CGSize(width: maxWidth, height: widthBasedHeight)
             }
         } else {
-            // 横屏图片：维持原有逻辑
-            let maxHeight: CGFloat = 300
-            let maxWidth = screenSize.width * 0.9
+            // 横屏图片：增大显示尺寸
+            let maxHeight = screenSize.height * 0.45 // 从固定300改为屏幕高度的45%
+            let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -518,8 +545,8 @@ struct ResultImageCard: View {
         let aspectRatio = imageSize.width / imageSize.height
         let isPortrait = aspectRatio < 1.0
         if isPortrait {
-            let maxHeight = screenSize.height * 0.65
-            let maxWidth = screenSize.width * 0.85
+            let maxHeight = screenSize.height * 0.75
+            let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
             if heightBasedWidth <= maxWidth {
@@ -528,8 +555,8 @@ struct ResultImageCard: View {
                 return CGSize(width: maxWidth, height: widthBasedHeight)
             }
         } else {
-            let maxHeight: CGFloat = 300
-            let maxWidth = screenSize.width * 0.9
+            let maxHeight = screenSize.height * 0.45
+            let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
             if heightBasedWidth <= maxWidth {
@@ -632,7 +659,6 @@ struct PressableTranslucentCapsuleStyle: ButtonStyle {
             .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
-
 
 #Preview {
     ContentView()
