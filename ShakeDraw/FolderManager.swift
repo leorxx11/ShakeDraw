@@ -191,8 +191,17 @@ class FolderManager: ObservableObject {
         // New format
         if let data = UserDefaults.standard.data(forKey: foldersKey) {
             do {
-                let list = try JSONDecoder().decode([ManagedFolder].self, from: data)
+                var list = try JSONDecoder().decode([ManagedFolder].self, from: data)
+                // 迁移：将内置 App Group 文件夹显示名从“共享图片”统一为“收藏”
+                var didRename = false
+                for i in list.indices {
+                    if list[i].isAppGroup == true, list[i].displayName == "共享图片" {
+                        list[i].displayName = "收藏"
+                        didRename = true
+                    }
+                }
                 self.folders = list
+                if didRename { persist() }
                 refreshPermissionFlag()
             } catch {
                 print("❌ 解码文件夹列表失败: \(error)")
@@ -294,14 +303,14 @@ class FolderManager: ObservableObject {
             do {
                 try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
                 #if DEBUG
-                print("🐞 已创建共享目录: \(dir.path)")
+                print("🐞 已创建收藏目录: \(dir.path)")
                 #endif
             } catch {
                 print("❌ 创建 App Group 目录失败: \(error)")
             }
         } else {
             #if DEBUG
-            print("🐞 共享目录已存在: \(dir.path)")
+            print("🐞 收藏目录已存在: \(dir.path)")
             #endif
         }
         return dir
@@ -318,7 +327,7 @@ class FolderManager: ObservableObject {
         if let idx = folders.firstIndex(where: { $0.isAppGroup == true }) {
             // 更新路径（若容器位置变化）
             folders[idx].lastResolvedPath = url.path
-            if folders[idx].displayName == nil { folders[idx].displayName = "共享图片" }
+            if folders[idx].displayName == nil { folders[idx].displayName = "收藏" }
             persist()
             // 更新计数
             refreshFolderCounts()
@@ -329,7 +338,7 @@ class FolderManager: ObservableObject {
             bookmarkData: nil,
             includeInDraw: true,
             lastResolvedPath: url.path,
-            displayName: "共享图片",
+            displayName: "收藏",
             isAppGroup: true
         )
         folders.insert(item, at: 0)
@@ -337,16 +346,16 @@ class FolderManager: ObservableObject {
         refreshFolderCounts()
     }
 
-    // 清空 App Group 共享图片目录（不删除目录本身）
+    // 清空 App Group 收藏目录（不删除目录本身）
     func clearAppGroupImages() {
         guard let dir = appGroupURL() else { return }
         do {
             let items = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [])
             for u in items { try? FileManager.default.removeItem(at: u) }
-            print("🗑️ 已清空共享图片目录: \(dir.path)")
+            print("🗑️ 已清空收藏目录: \(dir.path)")
             refreshFolderCounts()
         } catch {
-            print("❌ 清空共享图片目录失败: \(error)")
+            print("❌ 清空收藏目录失败: \(error)")
         }
     }
 
@@ -402,12 +411,12 @@ class FolderManager: ObservableObject {
         guard let dir = appGroupURL() else { print("🐞 [Debug] App Group 容器不可用"); return }
         var isDir: ObjCBool = false
         let exists = FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir)
-        print("🐞 [Debug] 共享目录路径: \(dir.path), 存在: \(exists), 目录: \(isDir.boolValue)")
+        print("🐞 [Debug] 收藏目录路径: \(dir.path), 存在: \(exists), 目录: \(isDir.boolValue)")
         do {
             let items = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [])
-            print("🐞 [Debug] 共享目录当前文件数: \(items.count)")
+            print("🐞 [Debug] 收藏目录当前文件数: \(items.count)")
         } catch {
-            print("🐞 [Debug] 读取共享目录失败: \(error)")
+            print("🐞 [Debug] 读取收藏目录失败: \(error)")
         }
         if let mf = folders.first(where: { $0.isAppGroup == true }) {
             print("🐞 [Debug] 管理项: include=\(mf.includeInDraw), lastResolvedPath=\(mf.lastResolvedPath)")
@@ -415,16 +424,16 @@ class FolderManager: ObservableObject {
         #endif
     }
 
-    // 调试：列出共享目录文件名（最多前 N 个）
+    // 调试：列出收藏目录文件名（最多前 N 个）
     func debugDumpAppGroupFiles(limit: Int = 50) {
         #if DEBUG
         guard let dir = appGroupURL() else { print("🐞 [Debug] 无 App Group 目录"); return }
         do {
             let items = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [])
             let names = items.prefix(limit).map { $0.lastPathComponent }
-            print("🐞 [Debug] 共享目录列举(最多\(limit)条): \(names)")
+            print("🐞 [Debug] 收藏目录列举(最多\(limit)条): \(names)")
         } catch {
-            print("🐞 [Debug] 列举共享目录失败: \(error)")
+            print("🐞 [Debug] 列举收藏目录失败: \(error)")
         }
         #endif
     }

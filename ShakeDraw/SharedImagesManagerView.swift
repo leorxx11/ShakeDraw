@@ -29,8 +29,8 @@ struct SharedImagesManagerView: View {
                     contentView
                 }
             }
-            .navigationTitle("共享图片")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle("收藏")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("关闭") { dismiss() }
@@ -64,7 +64,7 @@ struct SharedImagesManagerView: View {
         VStack(spacing: 16) {
             ProgressView()
                 .scaleEffect(1.2)
-            Text("加载共享图片...")
+            Text("加载收藏...")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -76,7 +76,7 @@ struct SharedImagesManagerView: View {
                 .font(.system(size: 60, weight: .light))
                 .foregroundColor(.secondary)
             
-            Text("还没有共享图片")
+            Text("还没有收藏")
                 .font(.title2)
                 .fontWeight(.semibold)
             
@@ -239,7 +239,7 @@ struct SharedImagesManagerView: View {
                 }
                 
             } catch {
-                print("❌ 加载共享图片失败: \(error)")
+                print("❌ 加载收藏失败: \(error)")
                 DispatchQueue.main.async {
                     self.sharedImages = []
                     self.isLoading = false
@@ -342,7 +342,7 @@ struct SharedImageCell: View {
     var body: some View {
         ZStack {
             Rectangle()
-                .fill(Color(UIColor.secondarySystemGroupedBackground))
+                .fill(Color.clear)
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(
                     Group {
@@ -395,11 +395,20 @@ struct SharedImageCell: View {
                 return
             }
             
-            // 生成缩略图
+            // 生成等比缩略图（自适应，不拉伸变形）
             let targetSize = CGSize(width: 150, height: 150)
-            let renderer = UIGraphicsImageRenderer(size: targetSize)
-            let thumbnailImage = renderer.image { _ in
-                uiImage.draw(in: CGRect(origin: .zero, size: targetSize))
+            let format = UIGraphicsImageRendererFormat.default()
+            format.opaque = false // 透明背景
+            let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+            let thumbnailImage = renderer.image { ctx in
+                let originalSize = uiImage.size
+                guard originalSize.width > 0 && originalSize.height > 0 else { return }
+                let scale = min(targetSize.width / originalSize.width, targetSize.height / originalSize.height)
+                let drawSize = CGSize(width: originalSize.width * scale, height: originalSize.height * scale)
+                let drawOrigin = CGPoint(x: (targetSize.width - drawSize.width) / 2.0,
+                                         y: (targetSize.height - drawSize.height) / 2.0)
+                let drawRect = CGRect(origin: drawOrigin, size: drawSize)
+                uiImage.draw(in: drawRect)
             }
             
             DispatchQueue.main.async {

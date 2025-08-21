@@ -734,9 +734,9 @@ class ShareViewController: UIViewController {
         if !FileManager.default.fileExists(atPath: sharedURL.path) {
             do {
                 try FileManager.default.createDirectory(at: sharedURL, withIntermediateDirectories: true, attributes: nil)
-                print("✅ 创建共享目录: \(sharedURL.path)")
+                print("✅ 创建收藏目录: \(sharedURL.path)")
             } catch {
-                print("❌ 创建共享目录失败: \(error)")
+                print("❌ 创建收藏目录失败: \(error)")
                 return nil
             }
         }
@@ -961,7 +961,7 @@ class ShareViewController: UIViewController {
     
     private func saveImageData(_ data: Data, withFormat format: String) -> Bool {
         guard let sharedURL = getSharedImagesURL() else {
-            print("❌ 无法获取共享目录")
+            print("❌ 无法获取收藏目录")
             return false
         }
         

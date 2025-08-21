@@ -415,7 +415,7 @@ struct SettingsView: View {
     
     private var foldersListSection: some View {
         Section("图片文件夹") {
-            // 共享图片文件夹
+            // 收藏文件夹
             ForEach(folderManager.folders.filter { $0.isAppGroup == true }) { folder in
                 sharedFolderRow(folder)
             }
@@ -438,14 +438,14 @@ struct SettingsView: View {
     
     private func sharedFolderRow(_ folder: FolderManager.ManagedFolder) -> some View {
         HStack {
-            Image(systemName: folder.includeInDraw ? "icloud.and.arrow.down.fill" : "icloud.and.arrow.down")
+            Image(systemName: folder.includeInDraw ? "star.fill" : "star")
                 .font(.title3)
                 .foregroundColor(folder.includeInDraw ? .blue : .secondary)
                 .frame(width: 24)
                 .animation(.easeInOut(duration: 0.2), value: folder.includeInDraw)
             
             VStack(alignment: .leading, spacing: 2) {
-                Text(folder.displayName ?? "共享图片")
+                Text(folder.displayName ?? "收藏")
                     .font(.body)
                 
                 if let count = folderManager.folderCounts[folder.id] {
@@ -634,7 +634,7 @@ struct SettingsView: View {
                 emptyStateView
             } else {
                 LazyVStack(spacing: 10) {
-                    // 共享图片文件夹
+                    // 收藏文件夹
                     ForEach(folderManager.folders.filter { $0.isAppGroup == true }) { folder in
                         sharedFolderCard(folder)
                     }
@@ -678,7 +678,7 @@ struct SettingsView: View {
                     ))
                     .frame(width: 44, height: 44)
                 
-                Image(systemName: "icloud.and.arrow.down.fill")
+                Image(systemName: "star.fill")
                     .font(.system(size: 20, weight: .semibold))
                     .foregroundStyle(
                         LinearGradient(
@@ -691,7 +691,7 @@ struct SettingsView: View {
             
             // 内容
             VStack(alignment: .leading, spacing: 6) {
-                Text(folder.displayName ?? "共享图片")
+                Text(folder.displayName ?? "收藏")
                     .font(.system(size: 16, weight: .semibold))
                 
                 HStack(spacing: 12) {
@@ -745,13 +745,13 @@ struct SettingsView: View {
             Button {
                 showSharedImagesManager = true
             } label: {
-                Label("管理共享图片", systemImage: "photo.on.rectangle.angled")
+                Label("管理收藏", systemImage: "star")
             }
             
             Button(role: .destructive) {
                 folderManager.clearAppGroupImages()
             } label: {
-                Label("清空共享图片", systemImage: "trash")
+                Label("清空收藏", systemImage: "trash")
             }
         }
     }
@@ -850,7 +850,7 @@ struct SettingsView: View {
                             .font(.headline)
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
-                        Text("仅移除本地文件夹访问配置，保留共享图片")
+                        Text("仅移除本地文件夹访问配置，保留收藏")
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.8))
                     }
@@ -1017,13 +1017,13 @@ struct PoolSettingsView: View {
 
     private func sharedFolderRow(_ folder: FolderManager.ManagedFolder) -> some View {
         HStack {
-            Image(systemName: folder.includeInDraw ? "icloud.and.arrow.down.fill" : "icloud.and.arrow.down")
+            Image(systemName: folder.includeInDraw ? "star.fill" : "star")
                 .font(.title3)
                 .foregroundColor(folder.includeInDraw ? .blue : .secondary)
                 .frame(width: 24)
                 .animation(.easeInOut(duration: 0.2), value: folder.includeInDraw)
             VStack(alignment: .leading, spacing: 2) {
-                Text(folder.displayName ?? "共享图片").font(.body)
+                Text(folder.displayName ?? "收藏").font(.body)
                 if let count = folderManager.folderCounts[folder.id] {
                     Text("\(count) 张图片").font(.caption).foregroundColor(.secondary)
                 }

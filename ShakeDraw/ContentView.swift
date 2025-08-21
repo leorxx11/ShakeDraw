@@ -184,7 +184,7 @@ struct ContentView: View {
             }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
-                    print("🐞 场景切回前台：刷新共享目录计数与图片池")
+                    print("🐞 场景切回前台：刷新收藏目录计数与图片池")
                     folderManager.refreshFolderCounts()
                     loadImagesIfNeeded(suppressAutoRestore: true)
                 }
