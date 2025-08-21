@@ -21,6 +21,8 @@ struct ContentView: View {
     @State private var isSlideshow = false
     @State private var slideshowTimer: Timer?
     @AppStorage("slideshowInterval") private var slideshowInterval: Double = 1.0
+    // Share (imperative presentation to avoid first-time blank issue)
+    @State private var isPresentingShare = false
     
     var body: some View {
         let mainContent = NavigationView {
@@ -110,16 +112,17 @@ struct ContentView: View {
                     }
                 }
 
-                // 左下角常驻抽签按钮（仅在已授权且有图片时显示）
+                // 左下角抽签 + 右下角分享（仅在已授权且有图片目录时显示）
                 if folderManager.hasPermission && !imageLoader.images.isEmpty {
                     VStack {
                         Spacer()
                         HStack {
-                        Button(action: {
-                            guard !drawManager.isDrawing, !drawManager.isRestoring else { return }
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            drawManager.performRandomDraw() // 立即开始，避免空闲闪屏
-                        }) {
+                            // 抽签按钮（左下）
+                            Button(action: {
+                                guard !drawManager.isDrawing, !drawManager.isRestoring else { return }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                drawManager.performRandomDraw() // 立即开始，避免空闲闪屏
+                            }) {
                                 Image(systemName: "die.face.5.fill")
                                     .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(.primary)
@@ -135,8 +138,30 @@ struct ContentView: View {
                                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
                             }
                             .disabled(drawManager.isDrawing || drawManager.isRestoring)
-                            
+
                             Spacer()
+
+                            // 分享按钮（右下）
+                            Button(action: {
+                                guard let image = drawManager.currentImage else { return }
+                                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                                presentShareSheet(items: [image])
+                            }) {
+                                Image(systemName: "square.and.arrow.up")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(drawManager.currentImage == nil ? .secondary : .primary)
+                                    .padding(12)
+                                    .background(
+                                        Circle()
+                                            .fill(.regularMaterial)
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+                                    )
+                                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                            }
+                            .disabled(drawManager.currentImage == nil)
                         }
                         .padding(.horizontal, 20)
                         .padding(.bottom, 16)
@@ -222,6 +247,51 @@ struct ContentView: View {
             }
         }
         return mainContent
+    }
+
+    // MARK: - Share Sheet
+    private func presentShareSheet(items: [Any]) {
+        DispatchQueue.main.async {
+            if isPresentingShare { return }
+            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            guard let window = scenes
+                .first(where: { $0.activationState == .foregroundActive })?
+                .windows.first(where: { $0.isKeyWindow }) else { return }
+
+            guard let top = topViewController(from: window.rootViewController) else { return }
+
+            let vc = UIActivityViewController(activityItems: items, applicationActivities: nil)
+            // Avoid customizing detents to prevent SharingUIService crash on iOS 18 simulator.
+            // The system defaults to a half-sheet on iPhone.
+            if #available(iOS 16.0, *), let sheet = vc.sheetPresentationController {
+                sheet.prefersGrabberVisible = true
+            }
+            if let pop = vc.popoverPresentationController {
+                pop.sourceView = window
+                pop.sourceRect = CGRect(x: window.bounds.midX, y: window.bounds.maxY, width: 1, height: 1)
+                pop.permittedArrowDirections = []
+            }
+            vc.completionWithItemsHandler = { _, _, _, _ in
+                DispatchQueue.main.async { isPresentingShare = false }
+            }
+            isPresentingShare = true
+            top.present(vc, animated: true, completion: nil)
+        }
+    }
+
+    private func topViewController(from root: UIViewController?) -> UIViewController? {
+        guard let root = root else { return nil }
+        var top = root
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        if let nav = top as? UINavigationController {
+            return nav.visibleViewController ?? nav
+        }
+        if let tab = top as? UITabBarController {
+            return tab.selectedViewController ?? tab
+        }
+        return top
     }
     
     private func getCachedImagePath() -> String? {
