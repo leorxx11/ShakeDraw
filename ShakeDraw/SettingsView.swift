@@ -45,7 +45,7 @@ struct SettingsView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("系数")
                                 .font(.body)
-                            Text("体感、拖拽/缩放、回弹与播放间隔")
+                            Text("体感、展示比例、拖拽/缩放、回弹与播放间隔")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -1081,6 +1081,9 @@ struct CoefficientsSettingsView: View {
     @AppStorage("zoomMax") private var zoomMax: Double = 2.0
     @AppStorage("reboundSpeed") private var reboundSpeed: Double = 0.40
     @AppStorage("reboundDamping") private var reboundDamping: Double = 0.85
+    // 图片展示比例：竖图/横图最大高度相对屏幕高度
+    @AppStorage("portraitMaxHeightFraction") private var portraitMaxHeightFraction: Double = 0.70
+    @AppStorage("landscapeMaxHeightFraction") private var landscapeMaxHeightFraction: Double = 0.40
 
     @State private var showResetConfirm = false
 
@@ -1089,6 +1092,7 @@ struct CoefficientsSettingsView: View {
             radarOverviewSection
             slideshowSettingsSection
             parallaxSettingsSection
+            displayRatioSection
             interactionRangeSection
             animationTuningSection
             resetSection
@@ -1100,7 +1104,7 @@ struct CoefficientsSettingsView: View {
             Button("重置", role: .destructive) { resetToDefaults() }
             Button("取消", role: .cancel) {}
         } message: {
-            Text("仅重置系数与间隔，不影响‘奖池’设置。")
+            Text("仅重置系数、展示比例与播放间隔，不影响‘奖池’设置。")
         }
     }
 
@@ -1139,6 +1143,8 @@ struct CoefficientsSettingsView: View {
         let clamp: (Double, Double, Double) -> Double = { v, lo, hi in max(0.0, min(1.0, (v - lo) / (hi - lo))) }
         return [
             ("体感", parallaxEnabled ? parallaxStrength : 0.0),
+            ("竖图占屏", clamp(portraitMaxHeightFraction, 0.5, 0.9)),
+            ("横图占屏", clamp(landscapeMaxHeightFraction, 0.2, 0.7)),
             ("拖拽X", clamp(panLimitFractionX, 0.05, 0.5)),
             ("拖拽Y", clamp(panLimitFractionY, 0.05, 0.5)),
             ("缩放最小", clamp(zoomMin, 0.5, 1.0)),
@@ -1152,7 +1158,6 @@ struct CoefficientsSettingsView: View {
     // 推荐默认值的归一化，用于与当前系数对比展示
     private var defaultRadarNormalizedValues: [Double] {
         let clamp: (Double, Double, Double) -> Double = { v, lo, hi in max(0.0, min(1.0, (v - lo) / (hi - lo))) }
-        let defaultParallaxEnabled = true
         let defaultParallaxStrength = 0.85
         let defaultPanX = 0.20
         let defaultPanY = 0.20
@@ -1161,9 +1166,13 @@ struct CoefficientsSettingsView: View {
         let defaultReboundSpeed = 0.40
         let defaultReboundDamping = 0.85
         let defaultInterval = 1.0
+        let defaultPortrait = 0.70
+        let defaultLandscape = 0.40
 
         return [
-            defaultParallaxEnabled ? defaultParallaxStrength : 0.0,
+            defaultParallaxStrength,
+            clamp(defaultPortrait, 0.5, 0.9),
+            clamp(defaultLandscape, 0.2, 0.7),
             clamp(defaultPanX, 0.05, 0.5),
             clamp(defaultPanY, 0.05, 0.5),
             clamp(defaultZoomMin, 0.5, 1.0),
@@ -1186,7 +1195,7 @@ struct CoefficientsSettingsView: View {
                 }
             }
         } footer: {
-            Text("将体感、拖拽/缩放、回弹及播放间隔恢复为推荐默认值。")
+            Text("将体感、展示比例、拖拽/缩放、回弹及播放间隔恢复为推荐默认值。")
         }
     }
 
@@ -1201,6 +1210,8 @@ struct CoefficientsSettingsView: View {
         zoomMax = 2.0
         reboundSpeed = 0.40
         reboundDamping = 0.85
+        portraitMaxHeightFraction = 0.70
+        landscapeMaxHeightFraction = 0.40
     }
 
     private func legendItem(color: Color, text: String) -> some View {
@@ -1274,6 +1285,68 @@ struct CoefficientsSettingsView: View {
                         .frame(width: 46, alignment: .trailing)
                 }
                 .opacity(parallaxEnabled ? 1 : 0.4)
+            }
+            .padding(.vertical, 6)
+        }
+    }
+
+    // 图片展示比例（竖图/横图）
+    private var displayRatioSection: some View {
+        Section("展示比例") {
+            VStack(spacing: 16) {
+                // 竖图高度占屏
+                HStack {
+                    Image(systemName: "rectangle.portrait")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.mint)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("竖图高度占屏")
+                        Text("竖屏图片最大高度相对屏幕高度（默认 70%）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.0f%%", portraitMaxHeightFraction * 100))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.mint)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.mint.opacity(0.12)))
+                }
+                HStack {
+                    Text("50%").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $portraitMaxHeightFraction, in: 0.5...0.9, step: 0.01) { Text("竖图高度占屏") }
+                        .tint(.mint)
+                    Text("90%").font(.caption).foregroundColor(.secondary)
+                }
+
+                // 横图高度占屏
+                HStack {
+                    Image(systemName: "rectangle")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.cyan)
+                        .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("横图高度占屏")
+                        Text("横屏图片最大高度相对屏幕高度（默认 40%）")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Text(String(format: "%.0f%%", landscapeMaxHeightFraction * 100))
+                        .font(.system(size: 15, weight: .medium, design: .rounded))
+                        .foregroundColor(.cyan)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(.cyan.opacity(0.12)))
+                }
+                HStack {
+                    Text("20%").font(.caption).foregroundColor(.secondary)
+                    Slider(value: $landscapeMaxHeightFraction, in: 0.2...0.7, step: 0.01) { Text("横图高度占屏") }
+                        .tint(.cyan)
+                    Text("70%").font(.caption).foregroundColor(.secondary)
+                }
             }
             .padding(.vertical, 6)
         }

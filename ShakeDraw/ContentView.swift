@@ -531,6 +531,9 @@ struct ResultImageView: View {
     @State private var scale = 0.9
     @State private var opacity = 0.0
     @State private var bounceScale = 1.0
+    // 可配置：竖屏/横屏图片的最大高度占屏幕百分比
+    @AppStorage("portraitMaxHeightFraction") private var portraitMaxHeightFraction: Double = 0.70
+    @AppStorage("landscapeMaxHeightFraction") private var landscapeMaxHeightFraction: Double = 0.40
     
     // 计算图片显示尺寸，针对竖屏图片优化
     private var imageDisplaySize: CGSize {
@@ -543,7 +546,7 @@ struct ResultImageView: View {
         
         if isPortrait {
             // 竖屏图片：允许更高的显示高度，占用更多屏幕空间
-            let maxHeight = screenSize.height * 0.70 // 从75%调整到70%
+            let maxHeight = screenSize.height * portraitMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
@@ -556,7 +559,7 @@ struct ResultImageView: View {
             }
         } else {
             // 横屏图片：增大显示尺寸
-            let maxHeight = screenSize.height * 0.40 // 从45%调整到40%
+            let maxHeight = screenSize.height * landscapeMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             
             let heightBasedWidth = maxHeight * aspectRatio
@@ -611,6 +614,9 @@ struct ZoomableImageCard: View {
     let offset: CGSize
     let magnifyBy: CGFloat
     let dragOffset: CGSize
+    // 可配置：竖屏/横屏图片的最大高度占屏幕百分比
+    @AppStorage("portraitMaxHeightFraction") private var portraitMaxHeightFraction: Double = 0.70
+    @AppStorage("landscapeMaxHeightFraction") private var landscapeMaxHeightFraction: Double = 0.40
 
     private var imageDisplaySize: CGSize {
         let screenSize = UIScreen.main.bounds.size
@@ -618,7 +624,7 @@ struct ZoomableImageCard: View {
         let aspectRatio = imageSize.width / imageSize.height
         let isPortrait = aspectRatio < 1.0
         if isPortrait {
-            let maxHeight = screenSize.height * 0.70
+            let maxHeight = screenSize.height * portraitMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -628,7 +634,7 @@ struct ZoomableImageCard: View {
                 return CGSize(width: maxWidth, height: widthBasedHeight)
             }
         } else {
-            let maxHeight = screenSize.height * 0.40
+            let maxHeight = screenSize.height * landscapeMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -660,6 +666,9 @@ struct ZoomableImageCard: View {
 // 静态图片卡片（统一样式，无入场弹跳），用于交叉淡入容器
 struct ResultImageCard: View {
     let image: UIImage
+    // 可配置：竖屏/横屏图片的最大高度占屏幕百分比
+    @AppStorage("portraitMaxHeightFraction") private var portraitMaxHeightFraction: Double = 0.70
+    @AppStorage("landscapeMaxHeightFraction") private var landscapeMaxHeightFraction: Double = 0.40
 
     private var imageDisplaySize: CGSize {
         let screenSize = UIScreen.main.bounds.size
@@ -667,7 +676,7 @@ struct ResultImageCard: View {
         let aspectRatio = imageSize.width / imageSize.height
         let isPortrait = aspectRatio < 1.0
         if isPortrait {
-            let maxHeight = screenSize.height * 0.70
+            let maxHeight = screenSize.height * portraitMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -677,7 +686,7 @@ struct ResultImageCard: View {
                 return CGSize(width: maxWidth, height: widthBasedHeight)
             }
         } else {
-            let maxHeight = screenSize.height * 0.40
+            let maxHeight = screenSize.height * landscapeMaxHeightFraction
             let maxWidth = screenSize.width * 0.92
             let heightBasedWidth = maxHeight * aspectRatio
             let widthBasedHeight = maxWidth / aspectRatio
@@ -727,9 +736,8 @@ struct CrossfadeResultView: View {
     // 回弹参数（用户可在设置中自定义）：速度与幅度
     @AppStorage("reboundSpeed") private var reboundSpeed: Double = 0.40   // 响应时间（s），越小越快，建议 0.1~0.6（默认推荐 0.40）
     @AppStorage("reboundDamping") private var reboundDamping: Double = 0.85 // 阻尼（0~1），越大越干净（默认推荐 0.85）
-    // 拖拽边界触达去抖
-    @State private var didHitEdgeX = false
-    @State private var didHitEdgeY = false
+    // 拖拽边界触达去抖（椭圆边界）：到边单次触感
+    @State private var didHitEdge = false
     @State private var didHitZoomMin = false
     @State private var didHitZoomMax = false
 
@@ -821,36 +829,40 @@ struct CrossfadeResultView: View {
                     },
                 DragGesture()
                     .updating($dragOffset) { currentState, gestureState, _ in
-                        // 限制拖拽范围：屏幕尺寸乘以各向比例
+                        // 椭圆边界夹取：半轴 a/b 基于屏幕与系数
                         let screen = UIScreen.main.bounds.size
-                        let limitX = CGFloat(screen.width * panLimitFractionX)
-                        let limitY = CGFloat(screen.height * panLimitFractionY)
+                        let a = max(1, CGFloat(screen.width * panLimitFractionX))   // 水平半轴
+                        let b = max(1, CGFloat(screen.height * panLimitFractionY))  // 垂直半轴
                         let t = currentState.translation
-                        let clamped = CGSize(
-                            width: min(max(t.width, -limitX), limitX),
-                            height: min(max(t.height, -limitY), limitY)
-                        )
-                        gestureState = clamped
+                        let dx = t.width
+                        let dy = t.height
+                        // r^2 = (dx/a)^2 + (dy/b)^2
+                        let r2 = (dx*dx)/(a*a) + (dy*dy)/(b*b)
+                        if r2 <= 1 {
+                            gestureState = CGSize(width: dx, height: dy)
+                        } else {
+                            let r = CGFloat(sqrt(Double(r2)))
+                            let s = 1 / max(0.0001, r)
+                            gestureState = CGSize(width: dx * s, height: dy * s)
+                        }
                     }
                     .onChanged { value in
-                        // 触达边界时触发一次触觉反馈
+                        // 靠近/触达边界时以固定节奏连续触发触觉反馈，营造“阻尼”感
                         let screen = UIScreen.main.bounds.size
-                        let limitX = CGFloat(screen.width * panLimitFractionX)
-                        let limitY = CGFloat(screen.height * panLimitFractionY)
-                        let tx = abs(value.translation.width)
-                        let ty = abs(value.translation.height)
-                        if !didHitEdgeX && tx >= limitX {
+                        let a = max(1, CGFloat(screen.width * panLimitFractionX))
+                        let b = max(1, CGFloat(screen.height * panLimitFractionY))
+                        let dx = value.translation.width
+                        let dy = value.translation.height
+                        let r = sqrt((dx*dx)/(a*a) + (dy*dy)/(b*b))
+
+                        // 椭圆边界：到边时单次触感；回到安全区再允许下次触发
+                        let hitThreshold: CGFloat = 1.0   // 达边界
+                        let resetThreshold: CGFloat = 0.92 // 回到安全区
+                        if !didHitEdge && r >= hitThreshold {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            didHitEdgeX = true
-                        } else if didHitEdgeX && tx < limitX * 0.9 {
-                            // 回到安全区后允许再次触发
-                            didHitEdgeX = false
-                        }
-                        if !didHitEdgeY && ty >= limitY {
-                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            didHitEdgeY = true
-                        } else if didHitEdgeY && ty < limitY * 0.9 {
-                            didHitEdgeY = false
+                            didHitEdge = true
+                        } else if didHitEdge && r < resetThreshold {
+                            didHitEdge = false
                         }
                     }
             )
