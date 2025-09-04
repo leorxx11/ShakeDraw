@@ -48,7 +48,7 @@ class RandomDrawManager: ObservableObject {
     }
     
     func performRandomDraw() {
-        print("🎲 performRandomDraw 被调用")
+        AppLog.d("🎲 performRandomDraw 被调用")
         
         guard let folderManager = folderManager,
               let imageLoader = imageLoader else {
@@ -56,9 +56,9 @@ class RandomDrawManager: ObservableObject {
             return
         }
         
-        print("🎲 folderManager.hasPermission: \(folderManager.hasPermission)")
-        print("🎲 imageLoader.images.isEmpty: \(imageLoader.images.isEmpty)")
-        print("🎲 imageLoader.images.count: \(imageLoader.images.count)")
+        AppLog.d("🎲 folderManager.hasPermission: \(folderManager.hasPermission)")
+        AppLog.d("🎲 imageLoader.images.isEmpty: \(imageLoader.images.isEmpty)")
+        AppLog.d("🎲 imageLoader.images.count: \(imageLoader.images.count)")
         
         guard folderManager.hasPermission,
               !imageLoader.images.isEmpty else {
@@ -66,7 +66,7 @@ class RandomDrawManager: ObservableObject {
             return
         }
         
-        print("✅ 权限检查通过，开始抽签")
+        AppLog.d("✅ 权限检查通过，开始抽签")
         // 先进入“抽签中”状态，避免短暂闪回 Idle 提示
         isDrawing = true
         // 保留当前结果在加载覆盖层下，避免空白/闪屏
@@ -76,8 +76,8 @@ class RandomDrawManager: ObservableObject {
         // 先预选目标（避免 SlotMachine 在目标为空时启动）
         let startTime = Date()
         if let targetURL = imageLoader.getRandomImage(excluding: currentImageURL) {
-            print("🎯 预选目标图片URL: \(targetURL)")
-            print("🎯 排除的当前图片URL: \(currentImageURL?.lastPathComponent ?? "无")")
+            AppLog.d("🎯 预选目标图片URL: \(targetURL)")
+            AppLog.d("🎯 排除的当前图片URL: \(currentImageURL?.lastPathComponent ?? "无")")
             pendingTargetURL = targetURL
             
             // 后台预加载目标全图
@@ -88,7 +88,7 @@ class RandomDrawManager: ObservableObject {
                 let targetImage = loaded.flatMap { imageLoader.predecode($0) }
                 DispatchQueue.main.async {
                     self.pendingTargetImage = targetImage
-                    print("✅ 预加载完成：目标图片")
+                    AppLog.d("✅ 预加载完成：目标图片")
                 }
             }
         }
@@ -146,7 +146,7 @@ class RandomDrawManager: ObservableObject {
     }
     
     private func finalizeAfter(minDelay: TimeInterval, startedAt: Date) {
-        print("⏱️ finalizeAfter 调用，等待最短时长后展示结果")
+        AppLog.d("⏱️ finalizeAfter 调用，等待最短时长后展示结果")
         let elapsed = Date().timeIntervalSince(startedAt)
         let remaining = max(0, minDelay - elapsed)
         DispatchQueue.main.asyncAfter(deadline: .now() + remaining) {
@@ -157,7 +157,7 @@ class RandomDrawManager: ObservableObject {
                 self.revealNow()
                 if let url = self.pendingTargetURL { self.saveLastResult(url: url) }
                 if let img = self.currentImage { self.savePreviewIfPossible(from: img) }
-                print("🎯 设置结果完成 - 使用预载图片: true")
+                AppLog.d("🎯 设置结果完成 - 使用预载图片: true")
             } else if let url = self.pendingTargetURL, let loader = self.imageLoader {
                 let parent = self.folderManager?.parentFolder(for: url)
                 // A: 先尝试生成缩略图，尽快揭示
@@ -169,7 +169,7 @@ class RandomDrawManager: ObservableObject {
                             self.currentImage = t
                             self.currentImageURL = url // 记录当前图片URL
                             self.revealNow()
-                            print("🎯 先用缩略图揭示结果")
+                            AppLog.d("🎯 先用缩略图揭示结果")
                         }
                     }
                 }
@@ -186,7 +186,7 @@ class RandomDrawManager: ObservableObject {
                         }
                         self.revealNow()
                         self.saveLastResult(url: url)
-                        print("🎯 设置结果完成 - 原图加载并替换: \(decoded != nil)")
+                        AppLog.d("🎯 设置结果完成 - 原图加载并替换: \(decoded != nil)")
                     }
                 }
             } else {
@@ -205,7 +205,7 @@ class RandomDrawManager: ObservableObject {
                         self.revealNow()
                         if let u = url { self.saveLastResult(url: u) }
                         if let img = decoded { self.savePreviewIfPossible(from: img) }
-                        print("🎯 设置结果完成 - 兜底异步加载: \(decoded != nil)")
+                        AppLog.d("🎯 设置结果完成 - 兜底异步加载: \(decoded != nil)")
                     }
                 }
             }
@@ -222,23 +222,23 @@ class RandomDrawManager: ObservableObject {
             if rel.hasPrefix("/") { rel.removeFirst() }
             UserDefaults.standard.set(rel, forKey: lastResultPathKey)
             UserDefaults.standard.set(folderPath, forKey: lastFolderPathKey)
-            print("💾 已保存上次结果相对路径: \(rel)")
+            AppLog.d("💾 已保存上次结果相对路径: \(rel)")
         } else {
             // 不在选中文件夹下，直接保存绝对路径（退化方案）
             UserDefaults.standard.set(filePath, forKey: lastResultPathKey)
             UserDefaults.standard.set(folderPath, forKey: lastFolderPathKey)
-            print("💾 已保存上次结果绝对路径: \(filePath)")
+            AppLog.d("💾 已保存上次结果绝对路径: \(filePath)")
         }
     }
 
     // 恢复上次结果
     func restoreLastResultIfAvailable() {
         guard folderManager?.hasPermission == true else {
-            print("ℹ️ 无法恢复：无文件夹权限")
+            AppLog.d("ℹ️ 无法恢复：无文件夹权限")
             return
         }
         guard let stored = UserDefaults.standard.string(forKey: lastResultPathKey), !stored.isEmpty else {
-            print("ℹ️ 没有保存的上次结果")
+            AppLog.d("ℹ️ 没有保存的上次结果")
             return
         }
         isRestoring = true
@@ -273,7 +273,7 @@ class RandomDrawManager: ObservableObject {
                 self.pendingTargetURL = url
                 self.pendingTargetImage = decoded
                 self.isRestoring = false
-                print("✅ 已恢复上次结果: \(url.lastPathComponent)")
+                AppLog.d("✅ 已恢复上次结果: \(url.lastPathComponent)")
             }
         }
     }
@@ -306,7 +306,7 @@ class RandomDrawManager: ObservableObject {
     }
     
     func clearAllData() {
-        print("🗑️ 清除RandomDrawManager所有数据")
+        AppLog.d("🗑️ 清除RandomDrawManager所有数据")
         resetDraw()
         
         // 清除UserDefaults中的相关数据
@@ -316,7 +316,7 @@ class RandomDrawManager: ObservableObject {
         // 清除缓存预览图片
         if let url = previewFileURL() {
             try? FileManager.default.removeItem(at: url)
-            print("🗑️ 已删除RandomDrawManager预览缓存")
+            AppLog.d("🗑️ 已删除RandomDrawManager预览缓存")
         }
     }
     

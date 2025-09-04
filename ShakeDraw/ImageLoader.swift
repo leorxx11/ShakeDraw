@@ -7,7 +7,6 @@ class ImageLoader: ObservableObject {
     @Published var isLoading = false
     
     private let supportedImageTypes: Set<String> = ["jpg", "jpeg", "png", "gif", "bmp", "tiff", "heic", "webp"]
-    private var parentFolderURL: URL?
     
     func loadImages(from folderInfo: [(url: URL, isAppGroup: Bool)]) {
         let paths = folderInfo.map { $0.url.path }.joined(separator: ", ")
@@ -73,12 +72,6 @@ class ImageLoader: ObservableObject {
         }
     }
     
-    // Backward compatibility method
-    func loadImages(from folderURLs: [URL]) {
-        let folderInfo = folderURLs.map { (url: $0, isAppGroup: $0.lastPathComponent == "SharedImages" && $0.path.contains("/Shared/AppGroup/")) }
-        loadImages(from: folderInfo)
-    }
-    
     private func isImageFile(_ url: URL) -> Bool {
         let fileExtension = url.pathExtension.lowercased()
         return supportedImageTypes.contains(fileExtension)
@@ -123,7 +116,7 @@ class ImageLoader: ObservableObject {
     func loadUIImage(from url: URL, parentFolderURL: URL? = nil, isAppGroup: Bool? = nil) -> UIImage? {
         print("🖼️ loadUIImage 被调用，URL: \(url)")
         
-        let folderURL = parentFolderURL ?? self.parentFolderURL
+        let folderURL = parentFolderURL
         
         // Manage security access if we have a parent folder
         var needsSecurityCleanup = false
@@ -161,7 +154,7 @@ class ImageLoader: ObservableObject {
 
     /// 加载缩略图，避免在滚动动画中解码超大原图造成卡顿
     func loadThumbnail(from url: URL, parentFolderURL: URL? = nil, maxDimension: CGFloat = 200, isAppGroup: Bool? = nil) -> UIImage? {
-        let folderURL = parentFolderURL ?? self.parentFolderURL
+        let folderURL = parentFolderURL
         
         // Manage security access if we have a parent folder
         var needsSecurityCleanup = false

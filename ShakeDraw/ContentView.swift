@@ -101,15 +101,7 @@ struct ContentView: View {
                     // 返回时刷新图片列表，但不自动还原上次图片（避免误触发缓存显示）
                     loadImagesIfNeeded(suppressAutoRestore: true)
                 }) {
-                    NavigationView {
-                        SettingsView(folderManager: folderManager)
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button("关闭") { showSettings = false }
-                                }
-                            }
-                    }
+                    SettingsView(folderManager: folderManager)
                 }
 
                 // 左下角抽签 + 右下角分享（仅在已授权且有图片目录时显示）
@@ -207,9 +199,13 @@ struct ContentView: View {
                 // 文件夹列表变化时重新加载图片
                 loadImagesIfNeeded(suppressAutoRestore: true)
             }
+            .onChange(of: showSettings) { _, isShown in
+                // 设置页打开时禁用摇一摇，避免触发导致导航栈重建
+                shakeDetector.isEnabled = !isShown
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
-                    print("🐞 场景切回前台：刷新收藏目录计数与图片池")
+                    AppLog.d("🐞 场景切回前台：刷新收藏目录计数与图片池")
                     folderManager.refreshFolderCounts()
                     loadImagesIfNeeded(suppressAutoRestore: true)
                 }
@@ -242,7 +238,7 @@ struct ContentView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         startSlideshow()
                     }
-                    print("🔄 幻灯片间隔更新为: \(newInterval)秒")
+                    AppLog.d("🔄 幻灯片间隔更新为: \(newInterval)秒")
                 }
             }
         }
@@ -343,7 +339,7 @@ struct ContentView: View {
             }
         }
         
-        print("🎬 幻灯片模式已开始，间隔: \(slideshowInterval)秒")
+        AppLog.d("🎬 幻灯片模式已开始，间隔: \(slideshowInterval)秒")
     }
     
     private func stopSlideshow() {
@@ -351,7 +347,7 @@ struct ContentView: View {
         slideshowTimer?.invalidate()
         slideshowTimer = nil
         
-        print("🛑 幻灯片模式已停止")
+        AppLog.d("🛑 幻灯片模式已停止")
     }
     
     private var setupView: some View {
@@ -478,7 +474,7 @@ struct ContentView: View {
                 CrossfadeResultView(image: image)
                     .onAppear {
                         #if DEBUG
-                        print("🖥️ 显示结果图片界面（交叉淡入）")
+                        AppLog.d("🖥️ 显示结果图片界面（交叉淡入）")
                         #endif
                     }
             }

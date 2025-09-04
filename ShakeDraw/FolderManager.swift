@@ -21,9 +21,6 @@ class FolderManager: ObservableObject {
     private let legacyBookmarkKey = "ShakeDrawFolderBookmark"
 
     private var documentPickerDelegate: FolderPickerDelegate?
-    
-    // 跟踪已启动安全访问权限的URLs
-    private var accessingURLs: Set<URL> = []
 
     // App Group 配置（请与工程 Capabilities 中的 App Group 保持一致）
     static let appGroupIdentifier = "group.com.leorxx.ShakeDraw"
@@ -36,41 +33,97 @@ class FolderManager: ObservableObject {
     }
 
     // MARK: - Public API
-    func selectFolder() { selectFolders() }
 
     func selectFolders() {
         let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [UTType.folder])
         documentPicker.allowsMultipleSelection = true
         documentPicker.shouldShowFileExtensions = true
         documentPicker.directoryURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        documentPicker.modalPresentationStyle = .formSheet
 
         documentPickerDelegate = FolderPickerDelegate(manager: self)
         documentPicker.delegate = documentPickerDelegate
 
         DispatchQueue.main.async {
-            if let windowScene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
-               let window = windowScene.windows.first(where: \.isKeyWindow) {
-                window.rootViewController?.present(documentPicker, animated: true)
+            guard let top = Self.topMostViewController() else { return }
+            // 避免重复呈现：如当前已有模态展示，取其最顶层再展示
+            if top.presentedViewController == nil {
+                top.present(documentPicker, animated: true)
+            } else {
+                // 如果已经有展示层（例如 SwiftUI 的 sheet），从其最顶层继续展示
+                Self.topPresentedController(from: top).present(documentPicker, animated: true)
             }
         }
+    }
+
+    // MARK: - Top VC helpers
+    private static func topMostViewController() -> UIViewController? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .first(where: { $0.activationState == .foregroundActive }) else { return nil }
+        let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first
+        guard var top = keyWindow?.rootViewController else { return nil }
+        while let presented = top.presentedViewController {
+            top = presented
+        }
+        return unwrapContainerController(top)
+    }
+
+    private static func topPresentedController(from vc: UIViewController) -> UIViewController {
+        var top = vc
+        while let presented = top.presentedViewController { top = presented }
+        return unwrapContainerController(top)
+    }
+
+    private static func unwrapContainerController(_ vc: UIViewController) -> UIViewController {
+        if let nav = vc as? UINavigationController { return nav.visibleViewController ?? nav }
+        if let tab = vc as? UITabBarController { return tab.selectedViewController ?? tab }
+        return vc
     }
 
     func addFolders(urls: [URL]) {
         var added = false
         for url in urls {
+            #if DEBUG
+            print("📁 [Import] 尝试添加文件夹: \(url.path)")
+            #endif
             // Start accessing security-scoped resource first
             let hasAccess = url.startAccessingSecurityScopedResource()
+            #if DEBUG
+            print("📁 [Import] startAccessingSecurityScopedResource = \(hasAccess)")
+            #endif
             defer { if hasAccess { url.stopAccessingSecurityScopedResource() } }
             
             do {
-                // Create security-scoped bookmark for persistent access
-                let data = try url.bookmarkData(options: [.minimalBookmark, .suitableForBookmarkFile], includingResourceValuesForKeys: nil, relativeTo: nil)
+                // Create bookmark data for persistent access (iOS: no withSecurityScope)
+                #if os(iOS)
+                var data: Data
+                do {
+                    data = try url.bookmarkData(options: [.minimalBookmark], includingResourceValuesForKeys: nil, relativeTo: nil)
+                } catch {
+                    // Fallback: some providers may not support minimalBookmark; try default options
+                    #if DEBUG
+                    print("⚠️ minimalBookmark 失败，尝试使用默认选项: \(error)")
+                    #endif
+                    data = try url.bookmarkData(options: [], includingResourceValuesForKeys: nil, relativeTo: nil)
+                }
+                #else
+                let data = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+                #endif
                 let path = url.standardizedFileURL.path
                 // de-dup by path
-                if folders.contains(where: { $0.lastResolvedPath == path }) { continue }
+                if folders.contains(where: { $0.lastResolvedPath == path }) {
+                    #if DEBUG
+                    print("ℹ️ [Import] 已存在，跳过: \(path)")
+                    #endif
+                    continue
+                }
                 let item = ManagedFolder(id: UUID(), bookmarkData: data, includeInDraw: true, lastResolvedPath: path, displayName: url.lastPathComponent, isAppGroup: false)
                 folders.append(item)
                 added = true
+                #if DEBUG
+                print("✅ [Import] 已添加: \(url.lastPathComponent)")
+                #endif
             } catch {
                 print("❌ 保存书签失败: \(error)")
             }
@@ -105,21 +158,7 @@ class FolderManager: ObservableObject {
         persist(); refreshPermissionFlag(); refreshFolderCounts()
     }
 
-    // Resolved URLs for included folders with security access management
-    func includedFolderURLs() -> [URL] {
-        folders.compactMap { mf in
-            guard mf.includeInDraw else { return nil }
-            guard let url = resolvedURL(for: mf) else { return nil }
-            
-            // For non-AppGroup folders, ensure security-scoped resource access
-            if mf.isAppGroup != true {
-                // We don't start access here as it needs to be managed by the caller
-                // Just verify the URL is valid
-                return url
-            }
-            return url
-        }
-    }
+    
 
     // All resolved URLs (included or not)
     func allResolvedFolderURLs() -> [URL] {
@@ -236,8 +275,8 @@ class FolderManager: ObservableObject {
 
     private func refreshPermissionFlag() {
         // 只有当存在启用的文件夹时才认为有权限
+        // 使用 @Published 自动通知，避免手动发送造成多余刷新和潜在的导航回退
         hasPermission = folders.contains { $0.includeInDraw }
-        objectWillChange.send()
     }
 
     // MARK: - Validation
@@ -277,8 +316,12 @@ class FolderManager: ObservableObject {
     private func resolveBookmark(_ data: Data) -> URL? {
         do {
             var stale = false
-            // Use security-scoped bookmark resolution
-            let url = try URL(resolvingBookmarkData: data, options: [], relativeTo: nil, bookmarkDataIsStale: &stale)
+            // iOS: resolve without UI; macOS: resolve with security scope
+            #if os(iOS)
+            let url = try URL(resolvingBookmarkData: data, options: [.withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+            #else
+            let url = try URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale)
+            #endif
             if stale {
                 print("🔄 书签已失效")
                 return nil
@@ -404,39 +447,7 @@ class FolderManager: ObservableObject {
 
     // iOS 不支持升级为安全作用域书签；保留空实现避免误用
 
-    // 调试：打印 App Group 状态
-    func debugPrintAppGroupInfo() {
-        #if DEBUG
-        print("🐞 [Debug] App Group ID = \(Self.appGroupIdentifier)")
-        guard let dir = appGroupURL() else { print("🐞 [Debug] App Group 容器不可用"); return }
-        var isDir: ObjCBool = false
-        let exists = FileManager.default.fileExists(atPath: dir.path, isDirectory: &isDir)
-        print("🐞 [Debug] 收藏目录路径: \(dir.path), 存在: \(exists), 目录: \(isDir.boolValue)")
-        do {
-            let items = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [])
-            print("🐞 [Debug] 收藏目录当前文件数: \(items.count)")
-        } catch {
-            print("🐞 [Debug] 读取收藏目录失败: \(error)")
-        }
-        if let mf = folders.first(where: { $0.isAppGroup == true }) {
-            print("🐞 [Debug] 管理项: include=\(mf.includeInDraw), lastResolvedPath=\(mf.lastResolvedPath)")
-        }
-        #endif
-    }
-
-    // 调试：列出收藏目录文件名（最多前 N 个）
-    func debugDumpAppGroupFiles(limit: Int = 50) {
-        #if DEBUG
-        guard let dir = appGroupURL() else { print("🐞 [Debug] 无 App Group 目录"); return }
-        do {
-            let items = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil, options: [])
-            let names = items.prefix(limit).map { $0.lastPathComponent }
-            print("🐞 [Debug] 收藏目录列举(最多\(limit)条): \(names)")
-        } catch {
-            print("🐞 [Debug] 列举收藏目录失败: \(error)")
-        }
-        #endif
-    }
+    // 已移除仅供调试的打印与列举函数，避免冗余代码
 }
 
 class FolderPickerDelegate: NSObject, UIDocumentPickerDelegate {

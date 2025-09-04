@@ -9,6 +9,8 @@ class ShakeDetector: ObservableObject {
     
     @Published var onShakeDetected: (() -> Void)?
     @Published var accelerometerAvailable: Bool = true
+    // 允许外部临时禁用摇一摇（例如设置页打开时）
+    @Published var isEnabled: Bool = true
     
     init() {
         startAccelerometerUpdates()
@@ -40,8 +42,9 @@ class ShakeDetector: ObservableObject {
                 let now = Date()
                 if now.timeIntervalSince(self.lastShakeTime) > self.shakeTimeInterval {
                     self.lastShakeTime = now
-                    print("🎯 摇一摇触发！总加速度: \(String(format: "%.2f", totalAcceleration)), 矢量幅值: \(String(format: "%.2f", magnitude))")
+                    AppLog.d("🎯 摇一摇触发！总加速度: \(String(format: "%.2f", totalAcceleration)), 矢量幅值: \(String(format: "%.2f", magnitude))")
                     DispatchQueue.main.async {
+                        guard self.isEnabled else { return }
                         self.onShakeDetected?()
                     }
                 }
