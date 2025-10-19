@@ -577,7 +577,7 @@ struct CoefficientsSettingsView: View {
         .listStyle(.insetGrouped)
         .navigationTitle("系数")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("重置为推荐默认值？", isPresented: $showResetConfirm, titleVisibility: .visible) {
+        .alert("重置为推荐默认值？", isPresented: $showResetConfirm) {
             Button("重置", role: .destructive) { resetToDefaults() }
             Button("取消", role: .cancel) {}
         } message: {
